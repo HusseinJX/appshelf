@@ -1,0 +1,25 @@
+const { contextBridge, ipcRenderer } = require('electron')
+
+contextBridge.exposeInMainWorld('api', {
+  getData: () => ipcRenderer.invoke('get-data'),
+  selectFolder: () => ipcRenderer.invoke('select-folder'),
+  addApps: (paths) => ipcRenderer.invoke('add-apps', paths),
+  updateApp: (app) => ipcRenderer.invoke('update-app', app),
+  deleteApp: (appId) => ipcRenderer.invoke('delete-app', appId),
+  moveApp: (opts) => ipcRenderer.invoke('move-app', opts),
+  runApp: (appId) => ipcRenderer.invoke('run-app', appId),
+  runCommandIn: (opts) => ipcRenderer.invoke('run-command-in', opts),
+  deployApp: (appId) => ipcRenderer.invoke('deploy-app', appId),
+  addGroup: (name) => ipcRenderer.invoke('add-group', name),
+  updateGroup: (group) => ipcRenderer.invoke('update-group', group),
+  deleteGroup: (groupId) => ipcRenderer.invoke('delete-group', groupId),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSettings: (s) => ipcRenderer.invoke('save-settings', s),
+  getPortfolioSettings: () => ipcRenderer.invoke('get-portfolio-settings'),
+  savePortfolioSettings: (p) => ipcRenderer.invoke('save-portfolio-settings', p),
+  enrichApps: (opts) => ipcRenderer.invoke('enrich-apps', opts),
+  onEnrichProgress: (cb) => ipcRenderer.on('enrich-progress', (_, data) => cb(data)),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  exportData: () => ipcRenderer.invoke('export-data'),
+  importData: () => ipcRenderer.invoke('import-data'),
+})

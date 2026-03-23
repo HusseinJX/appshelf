@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AppShelf</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Library View -->
+  <div id="library-view" class="view active">
+    <header class="titlebar">
+      <div class="traffic-lights-spacer"></div>
+      <div class="titlebar-logo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        AppShelf
+      </div>
+      <div class="titlebar-spacer"></div>
+      <button id="add-group-btn" class="btn btn-ghost no-drag">+ Group</button>
+      <button id="add-app-btn" class="btn btn-primary no-drag">+ Add Folder</button>
+      <button id="portfolio-btn" class="btn btn-ghost no-drag" title="Portfolio Settings">Portfolio</button>
+      <button id="settings-btn" class="btn btn-ghost no-drag icon-btn" title="Settings">⚙</button>
+    </header>
+
+    <!-- Selection + Enrich bar -->
+    <div id="selection-bar" class="selection-bar hidden">
+      <span id="sel-count" class="sel-count"></span>
+      <button id="sel-all-btn" class="btn btn-ghost btn-sm no-drag">Select All</button>
+      <button id="sel-none-btn" class="btn btn-ghost btn-sm no-drag">None</button>
+      <div class="sel-spacer"></div>
+      <div class="enrich-wrap no-drag">
+        <button id="enrich-btn" class="btn btn-primary">✦ Enrich</button>
+        <div id="enrich-panel" class="enrich-panel hidden">
+          <div class="enrich-panel-title">Enrich options</div>
+          <label class="enrich-opt">
+            <input type="checkbox" id="opt-github" checked>
+            <div class="enrich-opt-info">
+              <span>GitHub URL</span>
+              <small>Read .git remote URL automatically</small>
+            </div>
+          </label>
+          <label class="enrich-opt">
+            <input type="checkbox" id="opt-commands" checked>
+            <div class="enrich-opt-info">
+              <span>Run Commands</span>
+              <small>AI finds all runnable scripts &amp; services</small>
+            </div>
+          </label>
+          <label class="enrich-opt">
+            <input type="checkbox" id="opt-subapps">
+            <div class="enrich-opt-info">
+              <span>Sub-apps</span>
+              <small>AI finds separate services inside the folder</small>
+            </div>
+          </label>
+          <label class="enrich-opt">
+            <input type="checkbox" id="opt-deploy-check">
+            <div class="enrich-opt-info">
+              <span>Check Deployment Status</span>
+              <small>Check portfolio file &amp; live URL for app name</small>
+            </div>
+          </label>
+          <button id="enrich-go-btn" class="btn btn-primary enrich-go-btn">Enrich selected</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="drop-overlay" class="drop-overlay hidden">
+      <div class="drop-box">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          <line x1="12" y1="11" x2="12" y2="17"/>
+          <polyline points="9 14 12 17 15 14"/>
+        </svg>
+        <span>Drop folder to add</span>
+      </div>
+    </div>
+
+    <div id="empty-state" class="empty-state hidden">
+      <div class="empty-drop-zone">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          <line x1="12" y1="10" x2="12" y2="16"/>
+          <polyline points="9 13 12 16 15 13"/>
+        </svg>
+        <h2>Drop a folder here</h2>
+        <p>or <button class="link-btn" id="empty-add-btn">click to browse</button></p>
+      </div>
+    </div>
+
+    <div id="app-grid" class="app-grid"></div>
+  </div>
+
+  <!-- Detail View -->
+  <div id="detail-view" class="view">
+    <header class="titlebar">
+      <div class="traffic-lights-spacer"></div>
+      <button id="back-btn" class="btn btn-ghost no-drag">← Library</button>
+      <h2 id="detail-app-name" class="detail-title"></h2>
+      <div class="header-actions no-drag">
+        <button id="hdr-run-btn" class="btn btn-success">▶ Run</button>
+        <button id="hdr-deploy-btn" class="btn btn-accent">⬆ Deploy</button>
+      </div>
+    </header>
+    <div id="detail-content" class="detail-content"></div>
+  </div>
+
+  <!-- Portfolio Modal -->
+  <div id="portfolio-modal" class="modal hidden">
+    <div class="modal-backdrop" id="portfolio-backdrop"></div>
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h3>Portfolio Settings</h3>
+        <button class="modal-close" id="portfolio-close">×</button>
+      </div>
+      <div class="pf-grid">
+        <div class="field-group">
+          <label class="field-label">Portfolio File Path</label>
+          <input class="field-input mono" type="text" id="pf-file-path" placeholder="/path/to/portfolio/src/data/apps.js">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Live URL</label>
+          <div class="github-row">
+            <input class="field-input" type="text" id="pf-live-url" placeholder="https://yourportfolio.com">
+            <button class="btn btn-ghost btn-icon" id="pf-live-open" title="Open in browser">↗</button>
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Portfolio Deploy Command</label>
+          <input class="field-input mono" type="text" id="pf-deploy-cmd" placeholder="git push / vercel --prod">
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Entry Template &nbsp;<span style="color:var(--text3);font-size:10px;text-transform:none;letter-spacing:0">{{name}} {{description}} {{githubUrl}} {{runCommand}} {{date}} {{year}}</span></label>
+        <textarea class="field-input mono" id="pf-template" style="min-height:90px"></textarea>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Category → Section Mappings</label>
+        <div class="field-hint" style="margin-bottom:8px">Map each group to the marker where entries are injected in the portfolio file.</div>
+        <div class="pf-mappings-list" id="pf-mappings-list"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="portfolio-save-btn">Save</button>
+        <button class="btn btn-ghost" id="portfolio-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-backdrop" id="settings-backdrop"></div>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Settings</h3>
+        <button class="modal-close" id="settings-close">×</button>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Anthropic API Key</label>
+        <input class="field-input mono" type="password" id="api-key-input" placeholder="sk-ant-api03-...">
+        <div class="field-hint">Required for AI enrichment (run commands, sub-apps). Get yours at console.anthropic.com</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="settings-save-btn">Save</button>
+        <button class="btn btn-ghost" id="settings-cancel-btn">Cancel</button>
+      </div>
+
+      <div class="modal-sep"></div>
+
+      <div class="field-label">Data</div>
+      <div class="data-actions">
+        <button class="btn btn-ghost" id="export-btn">⬇ Export JSON</button>
+        <button class="btn btn-ghost" id="import-btn">⬆ Import JSON</button>
+      </div>
+      <div class="field-hint">Import merges without overwriting — existing apps and groups are kept as-is.</div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
