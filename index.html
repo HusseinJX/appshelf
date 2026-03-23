@@ -137,7 +137,7 @@
         </div>
       </div>
       <div class="field-group">
-        <label class="field-label">Entry Template &nbsp;<span style="color:var(--text3);font-size:10px;text-transform:none;letter-spacing:0">{{name}} {{description}} {{githubUrl}} {{runCommand}} {{date}} {{year}}</span></label>
+        <label class="field-label">Entry Template &nbsp;<span style="color:var(--text3);font-size:10px;text-transform:none;letter-spacing:0">{{name}} {{description}} {{githubUrl}} {{liveUrl}} {{runCommand}} {{date}} {{year}}</span></label>
         <textarea class="field-input mono" id="pf-template" style="min-height:90px"></textarea>
       </div>
       <div class="field-group">
@@ -178,6 +178,81 @@
         <button class="btn btn-ghost" id="import-btn">⬆ Import JSON</button>
       </div>
       <div class="field-hint">Import merges without overwriting — existing apps and groups are kept as-is.</div>
+
+      <div class="modal-sep"></div>
+
+      <div class="field-label">Deployment Providers</div>
+      <div class="field-hint" style="margin-bottom:12px">Configure a default provider to auto-deploy apps that have no live URL yet.</div>
+      <div class="provider-grid">
+        <div class="provider-card active" id="provider-do" data-provider="digitalocean">
+          <div class="provider-logo provider-do-logo">DO</div>
+          <div class="provider-name">DigitalOcean</div>
+          <div class="provider-badge" id="do-badge"></div>
+        </div>
+        <div class="provider-card disabled" title="Coming soon">
+          <div class="provider-logo provider-aws-logo">AWS</div>
+          <div class="provider-name">Amazon AWS</div>
+          <div class="provider-soon">Soon</div>
+        </div>
+        <div class="provider-card disabled" title="Coming soon">
+          <div class="provider-logo provider-gcp-logo">GCP</div>
+          <div class="provider-name">Google Cloud</div>
+          <div class="provider-soon">Soon</div>
+        </div>
+        <div class="provider-card disabled" title="Coming soon">
+          <div class="provider-logo provider-vercel-logo">▲</div>
+          <div class="provider-name">Vercel</div>
+          <div class="provider-soon">Soon</div>
+        </div>
+      </div>
+
+      <!-- DigitalOcean config panel -->
+      <div id="do-config-panel" class="provider-config-panel hidden">
+        <div class="provider-config-header">
+          <span>DigitalOcean App Platform</span>
+          <button class="provider-config-close" id="do-config-close">×</button>
+        </div>
+        <div class="field-group">
+          <label class="field-label">API Token</label>
+          <div class="github-row">
+            <input class="field-input mono" type="password" id="do-token" placeholder="dop_v1_...">
+            <button class="btn btn-ghost btn-icon" id="do-token-show" title="Show/hide">👁</button>
+          </div>
+          <div class="field-hint">Personal access token from cloud.digitalocean.com/account/api/tokens</div>
+        </div>
+        <div class="pf-grid">
+          <div class="field-group">
+            <label class="field-label">Default Region</label>
+            <select class="field-input" id="do-region">
+              <option value="nyc1">New York 1 (nyc1)</option>
+              <option value="nyc3">New York 3 (nyc3)</option>
+              <option value="sfo3">San Francisco 3 (sfo3)</option>
+              <option value="ams3">Amsterdam 3 (ams3)</option>
+              <option value="sgp1">Singapore 1 (sgp1)</option>
+              <option value="lon1">London 1 (lon1)</option>
+              <option value="fra1">Frankfurt 1 (fra1)</option>
+              <option value="tor1">Toronto 1 (tor1)</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label">Default Size</label>
+            <select class="field-input" id="do-size">
+              <option value="basic-xxs">basic-xxs (512 MB)</option>
+              <option value="basic-xs">basic-xs (1 GB)</option>
+              <option value="basic-s" selected>basic-s (2 GB)</option>
+              <option value="basic-m">basic-m (4 GB)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Default Branch</label>
+          <input class="field-input" type="text" id="do-branch" placeholder="main" value="main">
+        </div>
+        <div class="provider-config-actions">
+          <button class="btn btn-primary" id="do-save-btn">Save</button>
+          <button class="btn btn-ghost" id="do-clear-btn">Clear</button>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -176,3 +176,37 @@ Removed per-app portfolio fields. All portfolio configuration is now centralized
 
 - Point portfolio integration at the actual portfolio project file and section marker
 - Confirm entry template format to match the portfolio's existing app list schema
+
+---
+
+---
+
+## Checkpoint 7 — Deployment providers (DigitalOcean live)
+
+Added deployment provider system to Settings modal. DigitalOcean App Platform is fully functional; AWS, GCP, Vercel are UI placeholders.
+
+**Settings modal additions:**
+- Provider grid: 4 cards (DO active, others "Soon")
+- DO card toggles a config panel below: API token (password + show/hide toggle), region dropdown (nyc1/nyc3/sfo3/ams3/sgp1/lon1/fra1/tor1), size dropdown (basic-xxs → basic-m, default basic-s), branch input
+- "Configured" badge on DO card when token is saved; "Clear" button to remove config
+- Saved under `settings.providers.digitalocean` in `appshelf-settings.json`
+
+**New IPC handlers:** `get-provider-settings`, `save-provider-settings`
+**New preload APIs:** `getProviderSettings`, `saveProviderSettings`, `onDeployProgress`
+
+**DigitalOcean deploy flow (Step 0 in `deploy-app`):**
+- Triggered when `!app_data.liveUrl` and `providers.digitalocean.token` exists
+- `detectAppEnvironment` — detects node/python/go/rust/dockerfile from files
+- `generateDOSpecYAML` — produces App Platform spec YAML (repo from githubUrl, branch, region, size, build/run commands per env)
+- `execPromise` helper wraps child_process exec as a Promise
+- `doctl apps create --spec <file>` — creates the app, captures DO app ID and initial live URL
+- `waitForDODeployment` — polls `doctl apps list-deployments` every 15s until ACTIVE/ERROR (15 min timeout)
+- Fetches live URL via `doctl apps get` if not returned at create time
+- Sends real-time `deploy-progress` IPC events per step (shown in deploy log panel)
+- On success: saves `liveUrl` to app data, shows clickable URL in sidebar and deploy log
+
+**Portfolio template:** Added `{{liveUrl}}` placeholder support
+
+**Detail sidebar:** Shows `liveUrl` as a clickable link row below deploy status when set; hidden span kept for post-deploy update without re-render
+
+**Also committed:** git repo initialized (`git init`) and Checkpoints 1–6 committed before this session's work.

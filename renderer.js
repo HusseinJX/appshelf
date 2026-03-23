@@ -452,6 +452,7 @@ function renderDetail() {
         ${runSidebarHTML}
         <button class="sidebar-btn sb-deploy ${deployBtnClass(app)}" id="sb-deploy">${deployBtnIcon(app)}&nbsp; Deploy</button>
         ${renderDeployStatusLine(app)}
+        ${app.liveUrl ? `<div class="sb-live-url-row"><span class="dot-ok">●</span> <a id="sb-live-url" href="#" onclick="window.api.openExternal('${esc(app.liveUrl)}');return false" style="color:var(--accent);font-size:11px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;max-width:200px;display:inline-block">${esc(app.liveUrl)}</a></div>` : `<div class="sb-live-url-row" style="display:none"><span class="dot-ok">●</span> <span id="sb-live-url" style="color:var(--accent);font-size:11px"></span></div>`}
         <div class="sb-sep"></div>
         <div class="field-label" style="margin-bottom:0">Deploy Log</div>
         <div class="status-log" id="status-log"></div>
@@ -580,10 +581,29 @@ async function doDeploy(appId) {
   if (r.error) { setLog(`Error: ${r.error}`, 'error'); toast('Deploy failed', 'error'); return }
   let log = ''
   for (const s of r.steps || []) {
-    const label = {'deploy-app':'App deploy','update-portfolio':'Portfolio update','deploy-portfolio':'Portfolio deploy'}[s.step] || s.step
+    const label = {
+      'provision-do': 'DigitalOcean deploy',
+      'deploy-app': 'App deploy',
+      'update-portfolio': 'Portfolio update',
+      'deploy-portfolio': 'Portfolio deploy'
+    }[s.step] || s.step
     if (s.result.skipped) log += `<span class="skip">⊘ ${label}: skipped</span>\n`
     else if (s.result.error) log += `<span class="err">✗ ${label}: ${s.result.error}</span>\n`
-    else { log += `<span class="ok">✓ ${label}</span>\n`; if (s.result.stdout?.trim()) log += s.result.stdout.trim() + '\n' }
+    else {
+      log += `<span class="ok">✓ ${label}</span>\n`
+      if (s.result.liveUrl) log += `  → <a href="#" onclick="window.api.openExternal('${s.result.liveUrl}');return false" style="color:var(--accent)">${s.result.liveUrl}</a>\n`
+      if (s.result.stdout?.trim()) log += s.result.stdout.trim() + '\n'
+    }
+  }
+  // Update app's liveUrl in local state
+  const provStep = r.steps?.find(s => s.step === 'provision-do' && s.result.liveUrl)
+  if (provStep && current) {
+    current.liveUrl = provStep.result.liveUrl
+    const i = apps.findIndex(a => a.id === current.id)
+    if (i !== -1) apps[i].liveUrl = current.liveUrl
+    // Refresh live URL field in sidebar if present
+    const liveUrlEl = document.getElementById('sb-live-url')
+    if (liveUrlEl) { liveUrlEl.textContent = current.liveUrl; liveUrlEl.style.display = '' }
   }
   setLog(log.trim(), 'html')
   toast(r.success ? 'Deploy complete ✓' : 'Deploy finished with errors', r.success ? 'success' : 'error')
@@ -711,14 +731,35 @@ async function savePortfolioSettings() {
 
 // ── Settings modal ─────────────────────────────────
 async function openSettings() {
-  const s = await window.api.getSettings()
+  const [s, providers] = await Promise.all([
+    window.api.getSettings(),
+    window.api.getProviderSettings()
+  ])
   const input = document.getElementById('api-key-input')
   if (input) input.value = s.anthropicApiKey || ''
   if (s.hasEnvKey && !s.anthropicApiKey) input.placeholder = '(set via ANTHROPIC_API_KEY env var)'
+
+  // Populate DO fields
+  const doConfig = providers.digitalocean || {}
+  const doToken = document.getElementById('do-token')
+  const doRegion = document.getElementById('do-region')
+  const doSize = document.getElementById('do-size')
+  const doBranch = document.getElementById('do-branch')
+  if (doToken) doToken.value = doConfig.token || ''
+  if (doRegion) doRegion.value = doConfig.region || 'nyc1'
+  if (doSize) doSize.value = doConfig.size || 'basic-s'
+  if (doBranch) doBranch.value = doConfig.branch || 'main'
+
+  const badge = document.getElementById('do-badge')
+  if (badge) badge.textContent = doConfig.token ? 'Configured' : ''
+  const card = document.getElementById('provider-do')
+  if (card) card.classList.toggle('configured', !!doConfig.token)
+
   document.getElementById('settings-modal').classList.remove('hidden')
 }
 
 function closeSettings() {
+  document.getElementById('do-config-panel').classList.add('hidden')
   document.getElementById('settings-modal').classList.add('hidden')
 }
 
@@ -807,8 +848,64 @@ async function init() {
   document.getElementById('settings-cancel-btn').addEventListener('click', closeSettings)
   document.getElementById('settings-save-btn').addEventListener('click', async () => {
     const key = document.getElementById('api-key-input').value.trim()
-    await window.api.saveSettings({ anthropicApiKey: key })
+    const existing = await window.api.getSettings()
+    await window.api.saveSettings({ ...existing, anthropicApiKey: key })
     closeSettings(); toast('Settings saved', 'success')
+  })
+
+  // Provider cards
+  document.getElementById('provider-do')?.addEventListener('click', () => {
+    const panel = document.getElementById('do-config-panel')
+    const card = document.getElementById('provider-do')
+    const isOpen = !panel.classList.contains('hidden')
+    panel.classList.toggle('hidden', isOpen)
+    card.classList.toggle('open', !isOpen)
+  })
+  document.getElementById('do-config-close')?.addEventListener('click', () => {
+    document.getElementById('do-config-panel').classList.add('hidden')
+    document.getElementById('provider-do').classList.remove('open')
+  })
+  document.getElementById('do-token-show')?.addEventListener('click', () => {
+    const inp = document.getElementById('do-token')
+    inp.type = inp.type === 'password' ? 'text' : 'password'
+  })
+  document.getElementById('do-save-btn')?.addEventListener('click', async () => {
+    const token = document.getElementById('do-token').value.trim()
+    const region = document.getElementById('do-region').value
+    const size = document.getElementById('do-size').value
+    const branch = document.getElementById('do-branch').value.trim() || 'main'
+    const providers = await window.api.getProviderSettings()
+    providers.digitalocean = { token, region, size, branch }
+    await window.api.saveProviderSettings(providers)
+    const badge = document.getElementById('do-badge')
+    if (badge) badge.textContent = token ? 'Configured' : ''
+    const card = document.getElementById('provider-do')
+    if (card) card.classList.toggle('configured', !!token)
+    document.getElementById('do-config-panel').classList.add('hidden')
+    card.classList.remove('open')
+    toast('DigitalOcean settings saved', 'success')
+  })
+  document.getElementById('do-clear-btn')?.addEventListener('click', async () => {
+    document.getElementById('do-token').value = ''
+    document.getElementById('do-branch').value = 'main'
+    const providers = await window.api.getProviderSettings()
+    delete providers.digitalocean
+    await window.api.saveProviderSettings(providers)
+    const badge = document.getElementById('do-badge')
+    if (badge) badge.textContent = ''
+    document.getElementById('provider-do').classList.remove('configured', 'open')
+    document.getElementById('do-config-panel').classList.add('hidden')
+    toast('DigitalOcean config cleared', 'info')
+  })
+
+  // Deploy progress events (from DO provisioning)
+  window.api.onDeployProgress(({ appId, message }) => {
+    const log = document.getElementById('status-log')
+    if (log) {
+      log.classList.add('show')
+      log.textContent += (log.textContent ? '\n' : '') + message
+      log.scrollTop = log.scrollHeight
+    }
   })
 
   document.getElementById('export-btn').addEventListener('click', async () => {

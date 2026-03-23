@@ -22,4 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   exportData: () => ipcRenderer.invoke('export-data'),
   importData: () => ipcRenderer.invoke('import-data'),
+  getProviderSettings: () => ipcRenderer.invoke('get-provider-settings'),
+  saveProviderSettings: (p) => ipcRenderer.invoke('save-provider-settings', p),
+  onDeployProgress: (cb) => ipcRenderer.on('deploy-progress', (_, data) => cb(data)),
 })

@@ -236,12 +236,53 @@ ipcMain.handle('run-app', async (_, appId) => {
 })
 
 ipcMain.handle('deploy-app', async (_, appId) => {
-  const { apps } = loadData()
-  const app_data = apps.find(a => a.id === appId)
+  const data = loadData()
+  let app_data = data.apps.find(a => a.id === appId)
   if (!app_data) return { error: 'App not found' }
 
   const portfolio = getPortfolioSettings()
   const steps = []
+
+  // Step 0: DigitalOcean auto-deploy (if no liveUrl and DO configured)
+  if (!app_data.liveUrl) {
+    let providers = {}
+    try {
+      if (fs.existsSync(SETTINGS_FILE)) {
+        const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))
+        providers = s.providers || {}
+      }
+    } catch (e) {}
+
+    const doConfig = providers.digitalocean
+    if (doConfig?.token) {
+      const progressLines = []
+      const sendProgress = (msg) => {
+        progressLines.push(msg)
+        mainWindow.webContents.send('deploy-progress', { appId, message: msg })
+      }
+      const doResult = await deployToDigitalOcean(app_data, doConfig, sendProgress)
+      steps.push({
+        step: 'provision-do',
+        result: doResult.error
+          ? { error: doResult.error, stdout: progressLines.join('\n') }
+          : { success: true, stdout: progressLines.join('\n'), liveUrl: doResult.liveUrl }
+      })
+      if (doResult.error) return { success: false, steps }
+      // Persist liveUrl
+      if (doResult.liveUrl) {
+        const idx = data.apps.findIndex(a => a.id === appId)
+        if (idx !== -1) {
+          data.apps[idx].liveUrl = doResult.liveUrl
+          app_data = data.apps[idx]
+          saveData(data)
+        }
+      }
+    } else {
+      steps.push({ step: 'provision-do', result: { skipped: true } })
+    }
+  } else {
+    steps.push({ step: 'provision-do', result: { skipped: true } })
+  }
 
   // Step 1: app-level deploy command (optional)
   if (app_data.deployCommand) {
@@ -280,6 +321,7 @@ ipcMain.handle('deploy-app', async (_, appId) => {
         .replace(/\{\{description\}\}/g, app_data.description || '')
         .replace(/\{\{githubUrl\}\}/g, app_data.githubUrl || '')
         .replace(/\{\{runCommand\}\}/g, app_data.runCommand || '')
+        .replace(/\{\{liveUrl\}\}/g, app_data.liveUrl || '')
         .replace(/\{\{date\}\}/g, new Date().toISOString().split('T')[0])
         .replace(/\{\{year\}\}/g, new Date().getFullYear().toString())
       content = content.replace(marker, marker + '\n' + entry)
@@ -344,6 +386,137 @@ async function checkUrlForText(url, text) {
       req.on('timeout', () => { req.destroy(); resolve(null) })
     } catch (e) { resolve(null) }
   })
+}
+
+// ── DigitalOcean deployment ─────────────────────────
+function execPromise(cmd, opts = {}) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { timeout: 300000, ...opts }, (err, stdout, stderr) => {
+      if (err) reject(Object.assign(err, { stdout, stderr }))
+      else resolve({ stdout, stderr })
+    })
+  })
+}
+
+function detectAppEnvironment(folderPath) {
+  if (fs.existsSync(path.join(folderPath, 'Dockerfile'))) return 'dockerfile'
+  if (fs.existsSync(path.join(folderPath, 'docker-compose.yml')) || fs.existsSync(path.join(folderPath, 'docker-compose.yaml'))) return 'dockerfile'
+  if (fs.existsSync(path.join(folderPath, 'package.json'))) return 'node'
+  if (fs.existsSync(path.join(folderPath, 'requirements.txt')) || fs.existsSync(path.join(folderPath, 'pyproject.toml')) || fs.existsSync(path.join(folderPath, 'setup.py'))) return 'python'
+  if (fs.existsSync(path.join(folderPath, 'go.mod'))) return 'go'
+  if (fs.existsSync(path.join(folderPath, 'Cargo.toml'))) return 'rust'
+  return 'node'
+}
+
+function generateDOSpecYAML(appData, doConfig, env) {
+  const name = appData.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 32)
+  const githubParts = (appData.githubUrl || '').replace('https://github.com/', '').split('/')
+  const repo = githubParts[1] || name
+  const owner = githubParts[0] || 'unknown'
+  const branch = doConfig.branch || 'main'
+  const region = doConfig.region || 'nyc1'
+  const size = doConfig.size || 'basic-s'
+
+  let buildCmd = ''
+  let runCmd = appData.runCommand || ''
+  if (env === 'node') {
+    buildCmd = 'npm install && npm run build 2>/dev/null || npm install'
+    if (!runCmd) runCmd = 'npm start'
+  } else if (env === 'python') {
+    buildCmd = 'pip install -r requirements.txt 2>/dev/null || pip install -e . 2>/dev/null || true'
+    if (!runCmd) runCmd = 'python main.py'
+  } else if (env === 'go') {
+    buildCmd = 'go build -o app .'
+    if (!runCmd) runCmd = './app'
+  } else if (env === 'rust') {
+    buildCmd = 'cargo build --release'
+    if (!runCmd) runCmd = './target/release/' + name
+  }
+
+  return `name: ${name}
+region: ${region}
+services:
+- name: web
+  github:
+    repo: ${owner}/${repo}
+    branch: ${branch}
+    deploy_on_push: true
+  ${buildCmd ? `build_command: ${buildCmd}` : ''}
+  run_command: ${runCmd}
+  instance_size_slug: ${size}
+  instance_count: 1
+  http_port: 8080
+  health_check:
+    http_path: /
+`
+}
+
+async function waitForDODeployment(doAppId, apiToken, progressCb) {
+  const maxWait = 15 * 60 * 1000 // 15 min
+  const start = Date.now()
+  while (Date.now() - start < maxWait) {
+    await new Promise(r => setTimeout(r, 15000))
+    try {
+      const { stdout } = await execPromise(
+        `doctl apps list-deployments ${doAppId} --format ID,Phase --no-header`,
+        { env: { ...process.env, DIGITALOCEAN_ACCESS_TOKEN: apiToken } }
+      )
+      const lines = stdout.trim().split('\n').filter(Boolean)
+      if (!lines.length) continue
+      const latest = lines[0].trim().split(/\s+/)
+      const phase = latest[latest.length - 1]
+      if (progressCb) progressCb(`Deployment phase: ${phase}`)
+      if (phase === 'ACTIVE') return { success: true }
+      if (phase === 'ERROR' || phase === 'CANCELED') return { error: `Deployment ${phase.toLowerCase()}` }
+    } catch (e) { /* keep polling */ }
+  }
+  return { error: 'Deployment timed out after 15 minutes' }
+}
+
+async function deployToDigitalOcean(app_data, doConfig, sendProgress) {
+  if (!doConfig.token) return { error: 'DigitalOcean API token not configured' }
+  if (!app_data.githubUrl) return { error: 'App has no GitHub URL — enrich it first so DO App Platform can pull the source' }
+
+  const env = detectAppEnvironment(app_data.path)
+  sendProgress(`Detected environment: ${env}`)
+
+  const specYAML = generateDOSpecYAML(app_data, doConfig, env)
+  const specFile = path.join(app.getPath('temp'), `do-spec-${app_data.id}.yaml`)
+  fs.writeFileSync(specFile, specYAML)
+  sendProgress('Creating DigitalOcean app…')
+
+  let doAppId, liveUrl
+  try {
+    const tokenEnv = { ...process.env, DIGITALOCEAN_ACCESS_TOKEN: doConfig.token }
+    const { stdout: createOut } = await execPromise(
+      `doctl apps create --spec "${specFile}" --format ID,DefaultIngress --no-header`,
+      { env: tokenEnv }
+    )
+    const parts = createOut.trim().split(/\s+/)
+    doAppId = parts[0]
+    liveUrl = parts[1] ? (parts[1].startsWith('http') ? parts[1] : 'https://' + parts[1]) : ''
+    sendProgress(`App created: ${doAppId}${liveUrl ? ' → ' + liveUrl : ''}`)
+
+    sendProgress('Waiting for deployment to go live…')
+    const result = await waitForDODeployment(doAppId, doConfig.token, sendProgress)
+    if (result.error) return result
+
+    // Fetch live URL if we didn't get it from create
+    if (!liveUrl) {
+      try {
+        const { stdout: infoOut } = await execPromise(
+          `doctl apps get ${doAppId} --format DefaultIngress --no-header`,
+          { env: tokenEnv }
+        )
+        const u = infoOut.trim()
+        if (u) liveUrl = u.startsWith('http') ? u : 'https://' + u
+      } catch (e) {}
+    }
+  } finally {
+    try { fs.unlinkSync(specFile) } catch (e) {}
+  }
+
+  return { success: true, liveUrl: liveUrl || '' }
 }
 
 ipcMain.handle('get-portfolio-settings', () => getPortfolioSettings())
@@ -414,6 +587,27 @@ ipcMain.handle('import-data', async () => {
 
   saveData(data)
   return { success: true, addedApps, skippedApps, addedGroups, skippedGroups, data }
+})
+
+// ── IPC: Provider settings ─────────────────────────
+ipcMain.handle('get-provider-settings', () => {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))
+      return s.providers || {}
+    }
+  } catch (e) {}
+  return {}
+})
+
+ipcMain.handle('save-provider-settings', async (_, providers) => {
+  let settings = {}
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))
+  } catch (e) {}
+  settings.providers = providers
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2))
+  return true
 })
 
 ipcMain.handle('get-settings', () => {
