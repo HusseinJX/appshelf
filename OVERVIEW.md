@@ -172,6 +172,20 @@ Removed per-app portfolio fields. All portfolio configuration is now centralized
 
 ---
 
+## Checkpoint 9 — Packaged as macOS .app
+
+Added `npm run build` which produces a standalone `AppShelf.app` in `dist/`.
+
+- Installed `electron-packager` as devDependency
+- Created `icons/icon.icns` — gradient blue/dark grid icon matching the app's visual identity, generated via `qlmanage` + `sips` + `iconutil` from SVG source
+- Build script: `electron-packager . AppShelf --platform=darwin --arch=x64 --out=dist --overwrite --ignore dist --ignore .git --icon=icons/icon.icns`
+- Added `.gitignore` excluding `node_modules/` and `dist/`
+- Output: `dist/AppShelf-darwin-x64/AppShelf.app` (~242MB with Electron runtime bundled)
+
+**To install:** drag `dist/AppShelf-darwin-x64/AppShelf.app` to `/Applications`, then it appears in Launchpad/App drawer and can be pinned to the Dock.
+
+---
+
 ## Next Steps (pending)
 
 - Point portfolio integration at the actual portfolio project file and section marker

@@ -4,10 +4,12 @@
   "description": "App launcher and portfolio deployer",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-packager . AppShelf --platform=darwin --arch=x64 --out=dist --overwrite --ignore='^/dist' --ignore='^/.git' --icon=icons/icon.icns"
   },
   "devDependencies": {
-    "electron": "^28.0.0"
+    "electron": "^28.0.0",
+    "electron-packager": "^17.1.2"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0"
