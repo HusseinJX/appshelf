@@ -210,3 +210,21 @@ Added deployment provider system to Settings modal. DigitalOcean App Platform is
 **Detail sidebar:** Shows `liveUrl` as a clickable link row below deploy status when set; hidden span kept for post-deploy update without re-render
 
 **Also committed:** git repo initialized (`git init`) and Checkpoints 1–6 committed before this session's work.
+
+---
+
+---
+
+## Checkpoint 8 — JS window dragging, button reliability
+
+Replaced `-webkit-app-region` CSS drag entirely with JavaScript window dragging to fix unreliable hover/click on titlebar buttons.
+
+**Problem:** Electron's `-webkit-app-region: drag` on the titlebar caused macOS to intercept mouse events for buttons in the left/center area (+ Group, + Add Folder), making hover and click inconsistent. Portfolio and Settings (far right) were less affected. No amount of `no-drag` overrides or container wrappers fixed it reliably.
+
+**Solution:**
+- Removed all `-webkit-app-region` from titlebar and child elements
+- `mousedown` on any titlebar area that isn't a `button/input/select/a` starts a drag — sends `dx/dy` deltas via IPC to `mainWindow.setPosition()` in main process
+- New IPC: `move-window` (fire-and-forget `ipcRenderer.send`) + `ipcMain.on` handler
+- New preload API: `moveWindow(dx, dy)`
+- Wrapped library titlebar buttons in `.titlebar-actions` div; detail view back/run/deploy buttons similarly grouped
+- `btn-ghost` hover now shows `var(--bg4)` background for clear visual feedback

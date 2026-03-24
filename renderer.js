@@ -964,6 +964,26 @@ async function init() {
     }
   })
 
+  // Window dragging via JS (avoids -webkit-app-region conflicts with buttons)
+  document.querySelectorAll('.titlebar').forEach(titlebar => {
+    titlebar.addEventListener('mousedown', e => {
+      if (e.button !== 0) return
+      if (e.target.closest('button, input, select, a, [data-id]')) return
+      let lastX = e.screenX, lastY = e.screenY
+      const onMove = e => {
+        window.api.moveWindow(e.screenX - lastX, e.screenY - lastY)
+        lastX = e.screenX; lastY = e.screenY
+      }
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+      e.preventDefault()
+    })
+  })
+
   // Drag & drop folders
   let dragDepth = 0
   const overlay = document.getElementById('drop-overlay')

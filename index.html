@@ -22,10 +22,12 @@
         AppShelf
       </div>
       <div class="titlebar-spacer"></div>
-      <button id="add-group-btn" class="btn btn-ghost no-drag">+ Group</button>
-      <button id="add-app-btn" class="btn btn-primary no-drag">+ Add Folder</button>
-      <button id="portfolio-btn" class="btn btn-ghost no-drag" title="Portfolio Settings">Portfolio</button>
-      <button id="settings-btn" class="btn btn-ghost no-drag icon-btn" title="Settings">⚙</button>
+      <div class="titlebar-actions">
+        <button id="add-group-btn" class="btn btn-ghost">+ Group</button>
+        <button id="add-app-btn" class="btn btn-primary">+ Add Folder</button>
+        <button id="portfolio-btn" class="btn btn-ghost" title="Portfolio Settings">Portfolio</button>
+        <button id="settings-btn" class="btn btn-ghost icon-btn" title="Settings">⚙</button>
+      </div>
     </header>
 
     <!-- Selection + Enrich bar -->
@@ -101,9 +103,11 @@
   <div id="detail-view" class="view">
     <header class="titlebar">
       <div class="traffic-lights-spacer"></div>
-      <button id="back-btn" class="btn btn-ghost no-drag">← Library</button>
+      <div class="titlebar-actions">
+        <button id="back-btn" class="btn btn-ghost">← Library</button>
+      </div>
       <h2 id="detail-app-name" class="detail-title"></h2>
-      <div class="header-actions no-drag">
+      <div class="titlebar-actions">
         <button id="hdr-run-btn" class="btn btn-success">▶ Run</button>
         <button id="hdr-deploy-btn" class="btn btn-accent">⬆ Deploy</button>
       </div>

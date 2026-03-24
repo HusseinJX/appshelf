@@ -25,4 +25,5 @@ contextBridge.exposeInMainWorld('api', {
   getProviderSettings: () => ipcRenderer.invoke('get-provider-settings'),
   saveProviderSettings: (p) => ipcRenderer.invoke('save-provider-settings', p),
   onDeployProgress: (cb) => ipcRenderer.on('deploy-progress', (_, data) => cb(data)),
+  moveWindow: (dx, dy) => ipcRenderer.send('move-window', { dx, dy }),
 })

@@ -51,7 +51,8 @@ body {
   background: var(--bg2);
   border-bottom: 1px solid var(--border2);
   flex-shrink: 0;
-  -webkit-app-region: drag;
+  cursor: default;
+  user-select: none;
 }
 
 .traffic-lights-spacer { width: 76px; flex-shrink: 0; }
@@ -79,7 +80,13 @@ body {
 }
 
 .header-actions { display: flex; gap: 8px; }
-.no-drag { -webkit-app-region: no-drag; }
+.no-drag { }
+
+.titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 /* ── Buttons ── */
 .btn {
@@ -113,7 +120,7 @@ body {
   color: var(--text2);
   border: 1px solid var(--border);
 }
-.btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--text2); }
+.btn-ghost:hover:not(:disabled) { background: var(--bg4); color: var(--text); border-color: var(--border); }
 
 .link-btn {
   background: none;
@@ -770,6 +777,8 @@ input.field-input:focus {
   border-radius: 12px;
   padding: 24px;
   width: 420px;
+  max-height: 88vh;
+  overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0,0,0,0.6);
 }
 .modal-header {
@@ -1004,12 +1013,14 @@ input.field-input:focus {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 14px;
+  padding: 12px;
   margin-top: 4px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
+.provider-config-panel .field-group { margin-bottom: 0; }
+.provider-config-panel .pf-grid { gap: 0 10px; }
 .provider-config-panel.hidden { display: none; }
 
 .provider-config-header {

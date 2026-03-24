@@ -534,6 +534,11 @@ ipcMain.handle('save-portfolio-settings', async (_, portfolio) => {
 // ── IPC: Settings ──────────────────────────────────
 ipcMain.handle('open-external', (_, url) => shell.openExternal(url))
 
+ipcMain.on('move-window', (_, { dx, dy }) => {
+  const [x, y] = mainWindow.getPosition()
+  mainWindow.setPosition(x + dx, y + dy)
+})
+
 // ── IPC: Export / Import ───────────────────────────
 ipcMain.handle('export-data', async () => {
   const result = await dialog.showSaveDialog(mainWindow, {
