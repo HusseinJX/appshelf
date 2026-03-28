@@ -531,6 +531,53 @@ ipcMain.handle('save-portfolio-settings', async (_, portfolio) => {
   return true
 })
 
+// ── IPC: PersonalTrailblazer Portfolio ─────────────
+const TRAILBLAZER_PORTFOLIO = path.join(
+  require('os').homedir(),
+  'PersonalTrailblazer/client/src/data/portfolioData.json'
+)
+
+function loadPortfolioData() {
+  try {
+    if (fs.existsSync(TRAILBLAZER_PORTFOLIO)) {
+      return JSON.parse(fs.readFileSync(TRAILBLAZER_PORTFOLIO, 'utf8'))
+    }
+  } catch (e) {}
+  return null
+}
+
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+ipcMain.handle('get-portfolio-ids', () => {
+  const data = loadPortfolioData()
+  if (!data) return []
+  return data.projects.map(p => p.id)
+})
+
+ipcMain.handle('toggle-portfolio-project', (_, app) => {
+  const data = loadPortfolioData()
+  if (!data) return { error: 'Portfolio file not found', inPortfolio: false }
+  const id = slugify(app.name)
+  const idx = data.projects.findIndex(p => p.id === id)
+  if (idx >= 0) {
+    data.projects.splice(idx, 1)
+    fs.writeFileSync(TRAILBLAZER_PORTFOLIO, JSON.stringify(data, null, 2))
+    return { inPortfolio: false }
+  } else {
+    data.projects.push({
+      id,
+      name: app.name,
+      description: app.description || '',
+      url: app.liveUrl || app.githubUrl || '',
+      category: 'Productivity'
+    })
+    fs.writeFileSync(TRAILBLAZER_PORTFOLIO, JSON.stringify(data, null, 2))
+    return { inPortfolio: true }
+  }
+})
+
 // ── IPC: Settings ──────────────────────────────────
 ipcMain.handle('open-external', (_, url) => shell.openExternal(url))
 

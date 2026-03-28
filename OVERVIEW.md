@@ -242,3 +242,19 @@ Replaced `-webkit-app-region` CSS drag entirely with JavaScript window dragging 
 - New preload API: `moveWindow(dx, dy)`
 - Wrapped library titlebar buttons in `.titlebar-actions` div; detail view back/run/deploy buttons similarly grouped
 - `btn-ghost` hover now shows `var(--bg4)` background for clear visual feedback
+
+ cp -R dist/AppShelf-darwin-x64/AppShelf.app /Applications/
+
+claude --resume af6ec42c-2b61-46d8-8662-2c2c1cfc85ad
+
+---
+
+## Checkpoint 10 — Portfolio "+" button synced to PersonalTrailblazer
+
+Added a "+" button to every app card (alongside Run ▶ and Deploy) that toggles the app in/out of the PersonalTrailblazer portfolio JSON.
+
+**Files changed:**
+- `main.js`: Added `TRAILBLAZER_PORTFOLIO` path constant pointing to `~/PersonalTrailblazer/client/src/data/portfolioData.json`. Added `get-portfolio-ids` IPC handler (returns all current project IDs) and `toggle-portfolio-project` handler (adds or removes the entry by slugified name, writing `{ id, name, description, url, category: "Productivity" }`).
+- `preload.js`: Exposed `getPortfolioIds()` and `togglePortfolioProject(app)` via context bridge.
+- `renderer.js`: Added `portfolioIds` Set to state; loaded on init alongside app data. Added `slugify()` helper. Updated `makeAppCard` to render a `+` button with class `portfolio-in` (green) or `portfolio-out` (blue) based on whether the app's slugified name exists in `portfolioIds`. Click handler calls `togglePortfolioProject`, updates the set, and flips the button color in-place without re-rendering.
+- `styles.css`: Added `.portfolio-in` (green) and `.portfolio-out` (blue) button styles.

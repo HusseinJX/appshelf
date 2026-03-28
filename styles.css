@@ -876,6 +876,10 @@ input.field-input:focus {
 .deploy-green:hover:not(:disabled) { background: #3a9449 !important; }
 .deploy-yellow { background: #b8860b !important; color: #fff !important; }
 .deploy-yellow:hover:not(:disabled) { background: #d4a012 !important; }
+.portfolio-in { background: #2d7a3a !important; color: #fff !important; font-size: 14px !important; font-weight: 700 !important; }
+.portfolio-in:hover:not(:disabled) { background: #3a9449 !important; }
+.portfolio-out { background: #2a5298 !important; color: #fff !important; font-size: 14px !important; font-weight: 700 !important; }
+.portfolio-out:hover:not(:disabled) { background: #3464b8 !important; }
 
 /* ── Deploy status line in sidebar ── */
 .deploy-status-line {

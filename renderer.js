@@ -5,6 +5,7 @@ let current = null
 let slideIdx = 0
 let selected = new Set()        // selected app IDs
 let enriching = new Set()       // app IDs currently being enriched
+let portfolioIds = new Set()    // slugified IDs of apps in PersonalTrailblazer portfolio
 
 // ── Icon generation ────────────────────────────────
 const PALETTES = [
@@ -237,6 +238,10 @@ function makeGroupSection(group, sectionApps) {
   return section
 }
 
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
 function makeAppCard(app) {
   const [dark, light] = palette(app.name)
   const card = document.createElement('div')
@@ -245,6 +250,7 @@ function makeAppCard(app) {
   card.draggable = true
 
   const isEnriching = enriching.has(app.id)
+  const inPortfolio = portfolioIds.has(slugify(app.name))
 
   card.innerHTML = `
     <div class="card-cb ${selected.has(app.id) ? 'checked' : ''}">
@@ -259,13 +265,28 @@ function makeAppCard(app) {
     <div class="app-card-name">${esc(app.name)}</div>
     ${app.githubUrl ? `<button class="app-card-github" data-url="${esc(app.githubUrl)}" title="${esc(app.githubUrl)}">⎋ GitHub ↗</button>` : ''}
     <div class="app-card-quick">
-      <button class="btn btn-success" title="Run">▶</button>
-      <button class="btn ${deployBtnClass(app)}" title="${deployBtnTitle(app)}">${deployBtnIcon(app)}</button>
+      <button class="btn btn-success btn-run" title="Run">▶</button>
+      <button class="btn ${deployBtnClass(app)} btn-deploy" title="${deployBtnTitle(app)}">${deployBtnIcon(app)}</button>
+      <button class="btn btn-portfolio ${inPortfolio ? 'portfolio-in' : 'portfolio-out'}" title="${inPortfolio ? 'Remove from portfolio' : 'Add to portfolio'}">+</button>
     </div>`
 
   card.querySelector('.card-cb').addEventListener('click', e => { e.stopPropagation(); toggleSelect(app.id) })
-  card.querySelector('.btn-success').addEventListener('click', e => { e.stopPropagation(); doRun(app.id) })
-  card.querySelector('.app-card-quick .btn:last-child').addEventListener('click', e => { e.stopPropagation(); doDeploy(app.id) })
+  card.querySelector('.btn-run').addEventListener('click', e => { e.stopPropagation(); doRun(app.id) })
+  card.querySelector('.btn-deploy').addEventListener('click', e => { e.stopPropagation(); doDeploy(app.id) })
+  card.querySelector('.btn-portfolio').addEventListener('click', async e => {
+    e.stopPropagation()
+    const result = await window.api.togglePortfolioProject(app)
+    if (result.error) { console.error('Portfolio error:', result.error); return }
+    if (result.inPortfolio) {
+      portfolioIds.add(slugify(app.name))
+    } else {
+      portfolioIds.delete(slugify(app.name))
+    }
+    const btn = card.querySelector('.btn-portfolio')
+    btn.classList.toggle('portfolio-in', result.inPortfolio)
+    btn.classList.toggle('portfolio-out', !result.inPortfolio)
+    btn.title = result.inPortfolio ? 'Remove from portfolio' : 'Add to portfolio'
+  })
   card.querySelector('.app-card-github')?.addEventListener('click', e => { e.stopPropagation(); window.api.openExternal(app.githubUrl) })
   card.addEventListener('click', () => showDetail(app))
   card.addEventListener('dragstart', e => {
@@ -809,8 +830,9 @@ function esc(s) {
 
 // ── Init ───────────────────────────────────────────
 async function init() {
-  const data = await window.api.getData()
+  const [data, ids] = await Promise.all([window.api.getData(), window.api.getPortfolioIds()])
   groups = data.groups || []; apps = data.apps || []
+  portfolioIds = new Set(ids)
   renderLibrary()
 
   // Library buttons

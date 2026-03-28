@@ -26,4 +26,6 @@ contextBridge.exposeInMainWorld('api', {
   saveProviderSettings: (p) => ipcRenderer.invoke('save-provider-settings', p),
   onDeployProgress: (cb) => ipcRenderer.on('deploy-progress', (_, data) => cb(data)),
   moveWindow: (dx, dy) => ipcRenderer.send('move-window', { dx, dy }),
+  getPortfolioIds: () => ipcRenderer.invoke('get-portfolio-ids'),
+  togglePortfolioProject: (app) => ipcRenderer.invoke('toggle-portfolio-project', app),
 })
