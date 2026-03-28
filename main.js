@@ -581,6 +581,11 @@ ipcMain.handle('toggle-portfolio-project', (_, app) => {
 // ── IPC: Settings ──────────────────────────────────
 ipcMain.handle('open-external', (_, url) => shell.openExternal(url))
 
+ipcMain.handle('open-terminal', (_, folderPath) => {
+  const { exec } = require('child_process')
+  exec(`open -a Terminal "${folderPath}"`)
+})
+
 ipcMain.on('move-window', (_, { dx, dy }) => {
   const [x, y] = mainWindow.getPosition()
   mainWindow.setPosition(x + dx, y + dy)

@@ -880,6 +880,8 @@ input.field-input:focus {
 .portfolio-in:hover:not(:disabled) { background: #3a9449 !important; }
 .portfolio-out { background: #2a5298 !important; color: #fff !important; font-size: 14px !important; font-weight: 700 !important; }
 .portfolio-out:hover:not(:disabled) { background: #3464b8 !important; }
+.btn-terminal { background: #3a3a4a !important; color: #ccc !important; font-size: 11px !important; }
+.btn-terminal:hover:not(:disabled) { background: #4a4a5a !important; color: #fff !important; }
 
 /* ── Deploy status line in sidebar ── */
 .deploy-status-line {

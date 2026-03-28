@@ -268,6 +268,7 @@ function makeAppCard(app) {
       <button class="btn btn-success btn-run" title="Run">▶</button>
       <button class="btn ${deployBtnClass(app)} btn-deploy" title="${deployBtnTitle(app)}">${deployBtnIcon(app)}</button>
       <button class="btn btn-portfolio ${inPortfolio ? 'portfolio-in' : 'portfolio-out'}" title="${inPortfolio ? 'Remove from portfolio' : 'Add to portfolio'}">+</button>
+      <button class="btn btn-terminal" title="Open terminal here">⌨</button>
     </div>`
 
   card.querySelector('.card-cb').addEventListener('click', e => { e.stopPropagation(); toggleSelect(app.id) })
@@ -287,6 +288,7 @@ function makeAppCard(app) {
     btn.classList.toggle('portfolio-out', !result.inPortfolio)
     btn.title = result.inPortfolio ? 'Remove from portfolio' : 'Add to portfolio'
   })
+  card.querySelector('.btn-terminal').addEventListener('click', e => { e.stopPropagation(); window.api.openTerminal(app.path) })
   card.querySelector('.app-card-github')?.addEventListener('click', e => { e.stopPropagation(); window.api.openExternal(app.githubUrl) })
   card.addEventListener('click', () => showDetail(app))
   card.addEventListener('dragstart', e => {
