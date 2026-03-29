@@ -917,6 +917,37 @@ input.field-input:focus {
 .deploy-status-line .dot-fail { color: var(--red); }
 .deploy-status-line .dot-null { color: var(--text3); }
 
+/* ── Add Apps modal ── */
+.add-apps-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
+.add-app-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.add-app-icon {
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #fff;
+}
+.add-app-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.add-app-select {
+  -webkit-app-region: no-drag;
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text1);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+  cursor: pointer;
+}
+.add-app-select:focus { border-color: var(--accent); }
+
 /* ── Portfolio modal ── */
 .modal-wide { width: 560px !important; }
 

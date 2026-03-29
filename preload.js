@@ -29,5 +29,6 @@ contextBridge.exposeInMainWorld('api', {
   moveWindow: (dx, dy) => ipcRenderer.send('move-window', { dx, dy }),
   getPortfolioIds: () => ipcRenderer.invoke('get-portfolio-ids'),
   togglePortfolioProject: (app) => ipcRenderer.invoke('toggle-portfolio-project', app),
+  syncPortfolio: () => ipcRenderer.invoke('sync-portfolio'),
   openTerminal: (folderPath) => ipcRenderer.invoke('open-terminal', folderPath),
 })

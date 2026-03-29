@@ -667,17 +667,75 @@ async function addFolders(folderPaths) {
   const results = await window.api.addApps(folderPaths)
   const added = results.filter(r => !r.error)
   const errors = results.filter(r => r.error)
-  for (const r of added) apps.push(r)
-  renderLibrary()
   if (errors.length) toast(`${errors.length} skipped (already added)`, 'error')
-  if (added.length === 1) { toast(`Added "${added[0].name}"`, 'success'); showDetail(added[0]) }
-  else if (added.length > 1) toast(`Added ${added.length} apps`, 'success')
+  if (!added.length) return
+  showAddAppsModal(added)
+}
 
-  if (added.length) {
-    const appIds = added.map(r => r.id)
+function showAddAppsModal(added) {
+  const title = document.getElementById('add-apps-title')
+  title.textContent = added.length === 1 ? `Added "${added[0].name}"` : `Added ${added.length} apps`
+
+  const list = document.getElementById('add-apps-list')
+  list.innerHTML = ''
+  for (const app of added) {
+    const [dark, light] = palette(app.name)
+    const initials = app.name.slice(0,2).toUpperCase()
+    const row = document.createElement('div')
+    row.className = 'add-app-row'
+    row.dataset.id = app.id
+    row.innerHTML = `
+      <div class="add-app-icon" style="background:linear-gradient(135deg,${light},${dark})">${initials}</div>
+      <div class="add-app-name">${esc(app.name)}</div>
+      <select class="add-app-select">
+        <option value="">No group</option>
+        ${groups.map(g => `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('')}
+      </select>
+    `
+    list.appendChild(row)
+  }
+
+  document.getElementById('add-apps-modal').classList.remove('hidden')
+
+  const submit = document.getElementById('add-apps-submit')
+  const cancel = document.getElementById('add-apps-cancel')
+
+  const doSubmit = async () => {
+    cleanup()
+    const moves = []
+    list.querySelectorAll('.add-app-row').forEach(row => {
+      const groupId = row.querySelector('select').value || null
+      const app = added.find(a => a.id === row.dataset.id)
+      if (app) { app.groupId = groupId; moves.push({ appId: app.id, groupId }) }
+    })
+    await Promise.all(moves.map(m => window.api.moveApp(m)))
+    for (const app of added) apps.push(app)
+    renderLibrary()
+    if (added.length === 1) showDetail(added[0])
+    const appIds = added.map(a => a.id)
     for (const id of appIds) { enriching.add(id); setCardEnrichState(id, 'processing') }
     window.api.enrichApps({ appIds, options: { githubUrl: true } })
   }
+
+  const doCancel = async () => {
+    cleanup()
+    // Remove the added apps since user cancelled
+    await Promise.all(added.map(a => window.api.deleteApp(a.id)))
+    document.getElementById('add-apps-modal').classList.add('hidden')
+  }
+
+  function cleanup() {
+    document.getElementById('add-apps-modal').classList.add('hidden')
+    submit.removeEventListener('click', doSubmit)
+    cancel.removeEventListener('click', doCancel)
+    document.getElementById('add-apps-close').removeEventListener('click', doCancel)
+    document.getElementById('add-apps-backdrop').removeEventListener('click', doCancel)
+  }
+
+  submit.addEventListener('click', doSubmit)
+  cancel.addEventListener('click', doCancel)
+  document.getElementById('add-apps-close').addEventListener('click', doCancel)
+  document.getElementById('add-apps-backdrop').addEventListener('click', doCancel)
 }
 
 // ── Portfolio modal ─────────────────────────────────
@@ -693,7 +751,16 @@ function closePortfolio() {
 
 async function savePortfolioSettings() {
   const filePath = document.getElementById('pf-file-path').value.trim()
-  await window.api.savePortfolioSettings({ filePath })
+  const result = await window.api.savePortfolioSettings({ filePath })
+  if (result.groups) {
+    const added = result.groups.filter(g => !groups.find(eg => eg.id === g.id))
+    if (added.length) {
+      groups = result.groups
+      renderLibrary()
+      toast(`Portfolio saved · ${added.length} group${added.length > 1 ? 's' : ''} synced`, 'success')
+      closePortfolio(); return
+    }
+  }
   closePortfolio()
   toast('Portfolio settings saved', 'success')
 }
@@ -792,6 +859,18 @@ async function init() {
     const p = await window.api.selectFolder(); if (p.length) addFolders(p)
   })
   document.getElementById('portfolio-btn').addEventListener('click', openPortfolio)
+  document.getElementById('sync-portfolio-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('sync-portfolio-btn')
+    btn.disabled = true; btn.textContent = '↑ Syncing…'
+    const r = await window.api.syncPortfolio()
+    btn.disabled = false; btn.textContent = '↑ Sync'
+    if (r.notConfigured) { toast('Set your portfolio JSON file path first', 'error'); openPortfolio(); return }
+    if (r.error) { toast(r.error, 'error'); return }
+    const parts = []
+    if (r.added) parts.push(`${r.added} added`)
+    if (r.updated) parts.push(`${r.updated} updated`)
+    toast(parts.length ? `Portfolio synced: ${parts.join(', ')}` : 'Portfolio already up to date', 'success')
+  })
   document.getElementById('settings-btn').addEventListener('click', openSettings)
 
   // Search

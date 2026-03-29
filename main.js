@@ -536,7 +536,27 @@ ipcMain.handle('save-portfolio-settings', async (_, portfolio) => {
   } catch (e) {}
   settings.portfolio = portfolio
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2))
-  return true
+
+  // Sync groups from portfolio categories
+  if (portfolio.filePath) {
+    const pfData = loadPortfolioData(portfolio.filePath)
+    if (pfData?.categories) {
+      const data = loadData()
+      let changed = false
+      for (let i = 0; i < pfData.categories.length; i++) {
+        const cat = pfData.categories[i]
+        const name = cat.id
+        if (!data.groups.find(g => g.name === name)) {
+          const color = GROUP_COLORS[(data.groups.length) % GROUP_COLORS.length]
+          data.groups.push({ id: generateId(), name, color })
+          changed = true
+        }
+      }
+      if (changed) saveData(data)
+      return { groups: data.groups }
+    }
+  }
+  return {}
 })
 
 // ── IPC: Portfolio ──────────────────────────────────
@@ -585,6 +605,47 @@ ipcMain.handle('toggle-portfolio-project', (_, app) => {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2))
     return { inPortfolio: true }
   }
+})
+
+ipcMain.handle('sync-portfolio', () => {
+  const { filePath } = getPortfolioSettings()
+  if (!filePath) return { notConfigured: true }
+  const pfData = loadPortfolioData(filePath)
+  if (!pfData) return { error: 'Portfolio file not found' }
+  if (!Array.isArray(pfData.projects)) return { error: 'Invalid portfolio JSON: expected a "projects" array' }
+
+  const appData = loadData()
+  const groupMap = {}
+  for (const g of appData.groups) groupMap[g.id] = g.name
+
+  let added = 0, updated = 0
+  for (const app of appData.apps) {
+    const id = slugify(app.name)
+    const category = (app.groupId && groupMap[app.groupId]) || 'Productivity'
+    const entry = {
+      id,
+      name: app.name,
+      description: app.description || '',
+      url: app.liveUrl || app.githubUrl || '',
+      githubUrl: app.githubUrl || '',
+      category
+    }
+    const idx = pfData.projects.findIndex(p => p.id === id)
+    if (idx === -1) {
+      pfData.projects.push(entry)
+      added++
+    } else {
+      const existing = pfData.projects[idx]
+      const changed = Object.keys(entry).some(k => entry[k] !== existing[k])
+      if (changed) {
+        pfData.projects[idx] = { ...existing, ...entry }
+        updated++
+      }
+    }
+  }
+
+  fs.writeFileSync(filePath, JSON.stringify(pfData, null, 2))
+  return { added, updated }
 })
 
 // ── IPC: Settings ──────────────────────────────────

@@ -27,6 +27,7 @@
         <button id="add-group-btn" class="btn btn-ghost">+ Group</button>
         <button id="add-app-btn" class="btn btn-primary">+ Add Folder</button>
         <button id="portfolio-btn" class="btn btn-ghost" title="Portfolio Settings">Portfolio</button>
+        <button id="sync-portfolio-btn" class="btn btn-ghost" title="Sync all apps to portfolio JSON">↑ Sync</button>
         <button id="settings-btn" class="btn btn-ghost icon-btn" title="Settings">⚙</button>
       </div>
     </header>
@@ -114,6 +115,22 @@
       </div>
     </header>
     <div id="detail-content" class="detail-content"></div>
+  </div>
+
+  <!-- Add Apps Modal -->
+  <div id="add-apps-modal" class="modal hidden">
+    <div class="modal-backdrop" id="add-apps-backdrop"></div>
+    <div class="modal-box" style="width:480px">
+      <div class="modal-header">
+        <h3 id="add-apps-title">Added apps</h3>
+        <button class="modal-close" id="add-apps-close">×</button>
+      </div>
+      <div id="add-apps-list" class="add-apps-list"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="add-apps-submit">Add to Library</button>
+        <button class="btn btn-ghost" id="add-apps-cancel">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <!-- Portfolio Modal -->
