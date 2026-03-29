@@ -88,6 +88,29 @@ body {
   gap: 8px;
 }
 
+.search-input {
+  -webkit-app-region: no-drag;
+  background: var(--surface2);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text1);
+  font-size: 12px;
+  height: 28px;
+  outline: none;
+  padding: 0 10px;
+  width: 0;
+  opacity: 0;
+  transition: width 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
+  pointer-events: none;
+}
+.search-input.visible {
+  width: 160px;
+  opacity: 1;
+  pointer-events: auto;
+  border-color: var(--accent);
+}
+.search-input::placeholder { color: var(--text3); }
+
 /* ── Buttons ── */
 .btn {
   -webkit-app-region: no-drag;

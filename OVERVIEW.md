@@ -186,10 +186,28 @@ Added `npm run build` which produces a standalone `AppShelf.app` in `dist/`.
 
 ---
 
-## Next Steps (pending)
+## Checkpoint 12 — Portfolio path config, search, auto GitHub enrich
 
-- Point portfolio integration at the actual portfolio project file and section marker
-- Confirm entry template format to match the portfolio's existing app list schema
+**Portfolio modal simplified:**
+- Removed live URL, deploy command, entry template, and category mapping fields
+- Modal now only asks for the portfolio JSON file path (with a `…` browse button)
+- `+` button on cards now checks if portfolio path is configured; if not, shows a toast and opens the modal automatically
+
+**Portfolio JSON (`toggle-portfolio-project`):**
+- Now reads path from portfolio settings instead of the old hardcoded PersonalTrailblazer path
+- Adds `githubUrl` as an explicit field in the project entry alongside `url`
+- Returns `{ notConfigured: true }` if no path set so the UI can prompt the user
+
+**Search (press `/`):**
+- Pressing `/` anywhere in the library focuses and animates in a search input in the titlebar
+- Filters apps by name and description in real time
+- `Escape` clears and collapses the input
+
+**Auto GitHub enrichment on add:**
+- When folders are added, GitHub URL enrichment runs automatically in the background
+- Shows the same card processing overlay as manual enrich; updates detail view when done
+
+**New IPC:** `select-file` (opens a file picker filtered to JSON) exposed via preload as `selectFile`
 
 ---
 

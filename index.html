@@ -23,6 +23,7 @@
       </div>
       <div class="titlebar-spacer"></div>
       <div class="titlebar-actions">
+        <input id="search-input" class="search-input" type="text" placeholder="Search…" autocomplete="off">
         <button id="add-group-btn" class="btn btn-ghost">+ Group</button>
         <button id="add-app-btn" class="btn btn-primary">+ Add Folder</button>
         <button id="portfolio-btn" class="btn btn-ghost" title="Portfolio Settings">Portfolio</button>
@@ -118,36 +119,18 @@
   <!-- Portfolio Modal -->
   <div id="portfolio-modal" class="modal hidden">
     <div class="modal-backdrop" id="portfolio-backdrop"></div>
-    <div class="modal-box modal-wide">
+    <div class="modal-box">
       <div class="modal-header">
         <h3>Portfolio Settings</h3>
         <button class="modal-close" id="portfolio-close">×</button>
       </div>
-      <div class="pf-grid">
-        <div class="field-group">
-          <label class="field-label">Portfolio File Path</label>
-          <input class="field-input mono" type="text" id="pf-file-path" placeholder="/path/to/portfolio/src/data/apps.js">
-        </div>
-        <div class="field-group">
-          <label class="field-label">Live URL</label>
-          <div class="github-row">
-            <input class="field-input" type="text" id="pf-live-url" placeholder="https://yourportfolio.com">
-            <button class="btn btn-ghost btn-icon" id="pf-live-open" title="Open in browser">↗</button>
-          </div>
-        </div>
-        <div class="field-group">
-          <label class="field-label">Portfolio Deploy Command</label>
-          <input class="field-input mono" type="text" id="pf-deploy-cmd" placeholder="git push / vercel --prod">
-        </div>
-      </div>
       <div class="field-group">
-        <label class="field-label">Entry Template &nbsp;<span style="color:var(--text3);font-size:10px;text-transform:none;letter-spacing:0">{{name}} {{description}} {{githubUrl}} {{liveUrl}} {{runCommand}} {{date}} {{year}}</span></label>
-        <textarea class="field-input mono" id="pf-template" style="min-height:90px"></textarea>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Category → Section Mappings</label>
-        <div class="field-hint" style="margin-bottom:8px">Map each group to the marker where entries are injected in the portfolio file.</div>
-        <div class="pf-mappings-list" id="pf-mappings-list"></div>
+        <label class="field-label">Portfolio JSON File</label>
+        <div class="github-row">
+          <input class="field-input mono" type="text" id="pf-file-path" placeholder="/path/to/portfolioData.json">
+          <button class="btn btn-ghost btn-icon" id="pf-browse-btn" title="Browse">…</button>
+        </div>
+        <div class="field-hint">Path to the JSON file where projects are stored.</div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-primary" id="portfolio-save-btn">Save</button>

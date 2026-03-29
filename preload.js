@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('api', {
   getData: () => ipcRenderer.invoke('get-data'),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
+  selectFile: (opts) => ipcRenderer.invoke('select-file', opts),
   addApps: (paths) => ipcRenderer.invoke('add-apps', paths),
   updateApp: (app) => ipcRenderer.invoke('update-app', app),
   deleteApp: (appId) => ipcRenderer.invoke('delete-app', appId),

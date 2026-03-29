@@ -149,6 +149,14 @@ ipcMain.handle('select-folder', async () => {
   return result.canceled ? [] : result.filePaths
 })
 
+ipcMain.handle('select-file', async (_, opts = {}) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: opts.filters || []
+  })
+  return result.canceled ? null : result.filePaths[0]
+})
+
 // ── IPC: Apps ──────────────────────────────────────
 ipcMain.handle('add-apps', async (_, folderPaths) => {
   const data = loadData()
@@ -531,39 +539,39 @@ ipcMain.handle('save-portfolio-settings', async (_, portfolio) => {
   return true
 })
 
-// ── IPC: PersonalTrailblazer Portfolio ─────────────
-const TRAILBLAZER_PORTFOLIO = path.join(
-  require('os').homedir(),
-  'PersonalTrailblazer/client/src/data/portfolioData.json'
-)
+// ── IPC: Portfolio ──────────────────────────────────
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
 
-function loadPortfolioData() {
+function loadPortfolioData(filePath) {
   try {
-    if (fs.existsSync(TRAILBLAZER_PORTFOLIO)) {
-      return JSON.parse(fs.readFileSync(TRAILBLAZER_PORTFOLIO, 'utf8'))
+    if (fs.existsSync(filePath)) {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'))
     }
   } catch (e) {}
   return null
 }
 
-function slugify(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-}
-
 ipcMain.handle('get-portfolio-ids', () => {
-  const data = loadPortfolioData()
+  const { filePath } = getPortfolioSettings()
+  if (!filePath) return []
+  const data = loadPortfolioData(filePath)
   if (!data) return []
-  return data.projects.map(p => p.id)
+  return (data.projects || []).map(p => p.id)
 })
 
 ipcMain.handle('toggle-portfolio-project', (_, app) => {
-  const data = loadPortfolioData()
+  const { filePath } = getPortfolioSettings()
+  if (!filePath) return { notConfigured: true, inPortfolio: false }
+  const data = loadPortfolioData(filePath)
   if (!data) return { error: 'Portfolio file not found', inPortfolio: false }
+  if (!Array.isArray(data.projects)) return { error: 'Invalid portfolio JSON: expected a "projects" array', inPortfolio: false }
   const id = slugify(app.name)
   const idx = data.projects.findIndex(p => p.id === id)
   if (idx >= 0) {
     data.projects.splice(idx, 1)
-    fs.writeFileSync(TRAILBLAZER_PORTFOLIO, JSON.stringify(data, null, 2))
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2))
     return { inPortfolio: false }
   } else {
     data.projects.push({
@@ -571,9 +579,10 @@ ipcMain.handle('toggle-portfolio-project', (_, app) => {
       name: app.name,
       description: app.description || '',
       url: app.liveUrl || app.githubUrl || '',
+      githubUrl: app.githubUrl || '',
       category: 'Productivity'
     })
-    fs.writeFileSync(TRAILBLAZER_PORTFOLIO, JSON.stringify(data, null, 2))
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2))
     return { inPortfolio: true }
   }
 })

@@ -6,6 +6,7 @@ let slideIdx = 0
 let selected = new Set()        // selected app IDs
 let enriching = new Set()       // app IDs currently being enriched
 let portfolioIds = new Set()    // slugified IDs of apps in PersonalTrailblazer portfolio
+let searchQuery = ''
 
 // ── Icon generation ────────────────────────────────
 const PALETTES = [
@@ -146,9 +147,12 @@ function renderLibrary() {
   }
   empty.classList.add('hidden')
 
+  const q = searchQuery.toLowerCase()
+  const visibleApps = q ? apps.filter(a => a.name.toLowerCase().includes(q) || (a.description || '').toLowerCase().includes(q)) : apps
+
   const byGroup = {}
   const ungrouped = []
-  for (const app of apps) {
+  for (const app of visibleApps) {
     if (app.groupId) {
       if (!byGroup[app.groupId]) byGroup[app.groupId] = []
       byGroup[app.groupId].push(app)
@@ -277,7 +281,8 @@ function makeAppCard(app) {
   card.querySelector('.btn-portfolio').addEventListener('click', async e => {
     e.stopPropagation()
     const result = await window.api.togglePortfolioProject(app)
-    if (result.error) { console.error('Portfolio error:', result.error); return }
+    if (result.notConfigured) { toast('Set your portfolio JSON file path first', 'error'); openPortfolio(); return }
+    if (result.error) { toast(result.error, 'error'); return }
     if (result.inPortfolio) {
       portfolioIds.add(slugify(app.name))
     } else {
@@ -667,62 +672,18 @@ async function addFolders(folderPaths) {
   if (errors.length) toast(`${errors.length} skipped (already added)`, 'error')
   if (added.length === 1) { toast(`Added "${added[0].name}"`, 'success'); showDetail(added[0]) }
   else if (added.length > 1) toast(`Added ${added.length} apps`, 'success')
+
+  if (added.length) {
+    const appIds = added.map(r => r.id)
+    for (const id of appIds) { enriching.add(id); setCardEnrichState(id, 'processing') }
+    window.api.enrichApps({ appIds, options: { githubUrl: true } })
+  }
 }
 
 // ── Portfolio modal ─────────────────────────────────
-function renderMappingRows(portfolio, allGroups) {
-  const list = document.getElementById('pf-mappings-list')
-  if (!list) return
-  const mappings = portfolio.categoryMappings || []
-  const findMarker = (gid) => {
-    const m = mappings.find(m => {
-      if (gid === null) return m.groupId === null || m.groupId === undefined || m.groupId === ''
-      return m.groupId === gid
-    })
-    return m ? m.marker : ''
-  }
-
-  list.innerHTML = ''
-
-  // One row per group
-  for (const g of allGroups) {
-    const color = g.color || '#3a4a5a'
-    const row = document.createElement('div')
-    row.className = 'mapping-row'
-    row.dataset.groupId = g.id
-    row.innerHTML = `
-      <div class="mapping-group-label" style="border-left-color:${color}">${esc(g.name)}</div>
-      <span class="mapping-arrow">→</span>
-      <input class="field-input" type="text" placeholder="&lt;!-- SECTION_START --&gt;" value="${esc(findMarker(g.id))}">
-    `
-    list.appendChild(row)
-  }
-
-  // Default / Ungrouped row
-  const defRow = document.createElement('div')
-  defRow.className = 'mapping-row'
-  defRow.dataset.groupId = '__default__'
-  defRow.innerHTML = `
-    <div class="mapping-group-label" style="border-left-color:#3a4a5a">Default / Ungrouped</div>
-    <span class="mapping-arrow">→</span>
-    <input class="field-input" type="text" placeholder="&lt;!-- APPS_START --&gt;" value="${esc(findMarker(null))}">
-  `
-  list.appendChild(defRow)
-}
-
 async function openPortfolio() {
-  const [portfolio, data] = await Promise.all([
-    window.api.getPortfolioSettings(),
-    window.api.getData()
-  ])
-  const allGroups = data.groups || []
-
+  const portfolio = await window.api.getPortfolioSettings()
   document.getElementById('pf-file-path').value = portfolio.filePath || ''
-  document.getElementById('pf-live-url').value = portfolio.liveUrl || ''
-  document.getElementById('pf-deploy-cmd').value = portfolio.deployCommand || ''
-  document.getElementById('pf-template').value = portfolio.entryTemplate || ''
-
-  renderMappingRows(portfolio, allGroups)
   document.getElementById('portfolio-modal').classList.remove('hidden')
 }
 
@@ -732,22 +693,7 @@ function closePortfolio() {
 
 async function savePortfolioSettings() {
   const filePath = document.getElementById('pf-file-path').value.trim()
-  const liveUrl = document.getElementById('pf-live-url').value.trim()
-  const deployCommand = document.getElementById('pf-deploy-cmd').value.trim()
-  const entryTemplate = document.getElementById('pf-template').value
-
-  const categoryMappings = []
-  document.querySelectorAll('#pf-mappings-list .mapping-row').forEach(row => {
-    const gid = row.dataset.groupId
-    const marker = row.querySelector('input')?.value.trim() || ''
-    if (!marker) return
-    categoryMappings.push({
-      groupId: gid === '__default__' ? null : gid,
-      marker
-    })
-  })
-
-  await window.api.savePortfolioSettings({ filePath, liveUrl, deployCommand, entryTemplate, categoryMappings })
+  await window.api.savePortfolioSettings({ filePath })
   closePortfolio()
   toast('Portfolio settings saved', 'success')
 }
@@ -848,6 +794,24 @@ async function init() {
   document.getElementById('portfolio-btn').addEventListener('click', openPortfolio)
   document.getElementById('settings-btn').addEventListener('click', openSettings)
 
+  // Search
+  const searchEl = document.getElementById('search-input')
+  searchEl.addEventListener('input', () => {
+    searchQuery = searchEl.value
+    renderLibrary()
+  })
+  searchEl.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { searchQuery = ''; searchEl.value = ''; searchEl.classList.remove('visible'); searchEl.blur(); renderLibrary() }
+  })
+  document.addEventListener('keydown', e => {
+    const tag = document.activeElement?.tagName
+    if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA' && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault()
+      searchEl.classList.add('visible')
+      searchEl.focus()
+    }
+  })
+
   // Selection bar
   document.getElementById('sel-all-btn').addEventListener('click', selectAll)
   document.getElementById('sel-none-btn').addEventListener('click', selectNone)
@@ -861,9 +825,9 @@ async function init() {
   document.getElementById('portfolio-close').addEventListener('click', closePortfolio)
   document.getElementById('portfolio-cancel-btn').addEventListener('click', closePortfolio)
   document.getElementById('portfolio-save-btn').addEventListener('click', savePortfolioSettings)
-  document.getElementById('pf-live-open').addEventListener('click', () => {
-    const url = document.getElementById('pf-live-url')?.value.trim()
-    if (url) window.api.openExternal(url)
+  document.getElementById('pf-browse-btn').addEventListener('click', async () => {
+    const p = await window.api.selectFile({ filters: [{ name: 'JSON', extensions: ['json'] }] })
+    if (p) document.getElementById('pf-file-path').value = p
   })
 
   // Settings modal
