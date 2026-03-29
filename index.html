@@ -260,6 +260,26 @@
     </div>
   </div>
 
+  <!-- Folder Browser Modal -->
+  <div id="folder-browser-modal" class="modal hidden">
+    <div class="modal-backdrop" id="folder-browser-backdrop"></div>
+    <div class="modal-box" style="width:520px">
+      <div class="modal-header">
+        <h3>Add Folders</h3>
+        <button class="modal-close" id="folder-browser-close">×</button>
+      </div>
+      <div class="folder-browser-nav">
+        <button class="btn btn-ghost btn-sm" id="folder-browser-up">↑ Up</button>
+        <div class="folder-browser-path" id="folder-browser-path"></div>
+      </div>
+      <div id="folder-browser-list" class="folder-browser-list"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="folder-browser-submit">Add Selected</button>
+        <button class="btn btn-ghost" id="folder-browser-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div id="toast" class="toast hidden"></div>
 

@@ -3,6 +3,9 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('api', {
   getData: () => ipcRenderer.invoke('get-data'),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
+  getHomeDir: () => ipcRenderer.invoke('get-home-dir'),
+  listSubdirs: (dirPath) => ipcRenderer.invoke('list-subdirs', dirPath),
+  ignoreFolder: (folderPath) => ipcRenderer.invoke('ignore-folder', folderPath),
   selectFile: (opts) => ipcRenderer.invoke('select-file', opts),
   addApps: (paths) => ipcRenderer.invoke('add-apps', paths),
   updateApp: (app) => ipcRenderer.invoke('update-app', app),

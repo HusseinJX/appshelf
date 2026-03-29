@@ -16,10 +16,10 @@ function loadData() {
       const raw = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))
       // Migrate old flat-array format
       if (Array.isArray(raw)) return { groups: [], apps: raw }
-      return { groups: raw.groups || [], apps: raw.apps || [] }
+      return { groups: raw.groups || [], apps: raw.apps || [], ignoredPaths: raw.ignoredPaths || [] }
     }
   } catch (e) {}
-  return { groups: [], apps: [] }
+  return { groups: [], apps: [], ignoredPaths: [] }
 }
 
 function saveData(data) {
@@ -147,6 +147,33 @@ ipcMain.handle('select-folder', async () => {
     properties: ['openDirectory', 'multiSelections']
   })
   return result.canceled ? [] : result.filePaths
+})
+
+ipcMain.handle('get-home-dir', () => require('os').homedir())
+
+ipcMain.handle('list-subdirs', async (_, dirPath) => {
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    return {
+      path: dirPath,
+      parent: path.dirname(dirPath) !== dirPath ? path.dirname(dirPath) : null,
+      dirs: entries
+        .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+        .map(e => ({ name: e.name, path: path.join(dirPath, e.name) }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    }
+  } catch {
+    return { path: dirPath, parent: null, dirs: [] }
+  }
+})
+
+ipcMain.handle('ignore-folder', async (_, folderPath) => {
+  const data = loadData()
+  if (!data.ignoredPaths.includes(folderPath)) {
+    data.ignoredPaths.push(folderPath)
+    saveData(data)
+  }
+  return true
 })
 
 ipcMain.handle('select-file', async (_, opts = {}) => {

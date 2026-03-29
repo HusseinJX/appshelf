@@ -1,6 +1,7 @@
 // ── State ──────────────────────────────────────────
 let groups = []
 let apps = []
+let ignoredPaths = new Set()
 let current = null
 let slideIdx = 0
 let selected = new Set()        // selected app IDs
@@ -672,6 +673,105 @@ async function addFolders(folderPaths) {
   showAddAppsModal(added)
 }
 
+let folderBrowserParent = null
+
+async function openFolderBrowser() {
+  const homeDir = await window.api.getHomeDir()
+  showFolderBrowserModal(homeDir)
+}
+
+async function showFolderBrowserModal(dirPath) {
+  const modal = document.getElementById('folder-browser-modal')
+  modal.classList.remove('hidden')
+
+  await navigateFolderBrowser(dirPath)
+
+  const submit = document.getElementById('folder-browser-submit')
+  const cancel = document.getElementById('folder-browser-cancel')
+  const closeBtn = document.getElementById('folder-browser-close')
+  const backdrop = document.getElementById('folder-browser-backdrop')
+  const upBtn = document.getElementById('folder-browser-up')
+
+  function cleanup() {
+    modal.classList.add('hidden')
+    submit.removeEventListener('click', doSubmit)
+    cancel.removeEventListener('click', doClose)
+    closeBtn.removeEventListener('click', doClose)
+    backdrop.removeEventListener('click', doClose)
+    upBtn.removeEventListener('click', doUp)
+  }
+
+  async function doSubmit() {
+    const list = document.getElementById('folder-browser-list')
+    const checked = [...list.querySelectorAll('input[type="checkbox"]:checked')]
+    const paths = checked.map(cb => cb.value)
+    cleanup()
+    if (paths.length) addFolders(paths)
+  }
+
+  async function doUp() {
+    if (folderBrowserParent) await navigateFolderBrowser(folderBrowserParent)
+  }
+
+  function doClose() { cleanup() }
+
+  submit.addEventListener('click', doSubmit)
+  cancel.addEventListener('click', doClose)
+  closeBtn.addEventListener('click', doClose)
+  backdrop.addEventListener('click', doClose)
+  upBtn.addEventListener('click', doUp)
+}
+
+async function navigateFolderBrowser(dirPath) {
+  const result = await window.api.listSubdirs(dirPath)
+  folderBrowserParent = result.parent
+
+  document.getElementById('folder-browser-path').textContent = result.path
+  document.getElementById('folder-browser-up').disabled = !result.parent
+
+  const addedPaths = new Set(apps.map(a => a.path))
+  const list = document.getElementById('folder-browser-list')
+  list.innerHTML = ''
+
+  const available = result.dirs.filter(d => !addedPaths.has(d.path) && !ignoredPaths.has(d.path))
+
+  if (!available.length) {
+    const empty = document.createElement('div')
+    empty.className = 'folder-browser-empty'
+    empty.textContent = result.dirs.length ? 'All folders here are already added.' : 'No folders here.'
+    list.appendChild(empty)
+    return
+  }
+
+  for (const dir of available) {
+    const row = document.createElement('div')
+    row.className = 'folder-browser-item'
+    row.innerHTML = `
+      <input type="checkbox" value="${esc(dir.path)}">
+      <span class="folder-browser-item-name folder-browser-nav-link" data-path="${esc(dir.path)}">📁 ${esc(dir.name)}</span>
+      <button class="folder-browser-ignore btn btn-ghost btn-sm" title="Ignore">✕</button>
+    `
+    list.appendChild(row)
+  }
+
+  list.querySelectorAll('.folder-browser-nav-link').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      e.preventDefault()
+      await navigateFolderBrowser(el.dataset.path)
+    })
+  })
+
+  list.querySelectorAll('.folder-browser-ignore').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('.folder-browser-item')
+      const folderPath = row.querySelector('input[type="checkbox"]').value
+      ignoredPaths.add(folderPath)
+      await window.api.ignoreFolder(folderPath)
+      row.remove()
+    })
+  })
+}
+
 function showAddAppsModal(added) {
   const title = document.getElementById('add-apps-title')
   title.textContent = added.length === 1 ? `Added "${added[0].name}"` : `Added ${added.length} apps`
@@ -846,18 +946,14 @@ function esc(s) {
 // ── Init ───────────────────────────────────────────
 async function init() {
   const [data, ids] = await Promise.all([window.api.getData(), window.api.getPortfolioIds()])
-  groups = data.groups || []; apps = data.apps || []
+  groups = data.groups || []; apps = data.apps || []; ignoredPaths = new Set(data.ignoredPaths || [])
   portfolioIds = new Set(ids)
   renderLibrary()
 
   // Library buttons
   document.getElementById('add-group-btn').addEventListener('click', addGroup)
-  document.getElementById('add-app-btn').addEventListener('click', async () => {
-    const p = await window.api.selectFolder(); if (p.length) addFolders(p)
-  })
-  document.getElementById('empty-add-btn').addEventListener('click', async () => {
-    const p = await window.api.selectFolder(); if (p.length) addFolders(p)
-  })
+  document.getElementById('add-app-btn').addEventListener('click', openFolderBrowser)
+  document.getElementById('empty-add-btn').addEventListener('click', openFolderBrowser)
   document.getElementById('portfolio-btn').addEventListener('click', openPortfolio)
   document.getElementById('sync-portfolio-btn').addEventListener('click', async () => {
     const btn = document.getElementById('sync-portfolio-btn')

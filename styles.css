@@ -1109,3 +1109,68 @@ input.field-input:focus {
   display: flex;
   gap: 8px;
 }
+
+/* ── Folder Browser modal ── */
+.folder-browser-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.folder-browser-path {
+  font-size: 11px;
+  color: var(--text3);
+  font-family: monospace;
+  flex: 1;
+  word-break: break-all;
+}
+.folder-browser-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 380px;
+  overflow-y: auto;
+  margin-bottom: 4px;
+}
+.folder-browser-empty {
+  color: var(--text3);
+  font-size: 13px;
+  padding: 24px 0;
+  text-align: center;
+}
+.folder-browser-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.folder-browser-item:hover { background: var(--surface2); }
+.folder-browser-item input[type="checkbox"] {
+  width: 15px; height: 15px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.folder-browser-item-name {
+  font-size: 13px;
+  color: var(--text1);
+  flex: 1;
+}
+.folder-browser-nav-link {
+  cursor: pointer;
+  color: var(--accent);
+}
+.folder-browser-nav-link:hover { text-decoration: underline; }
+.folder-browser-ignore {
+  opacity: 0;
+  transition: opacity 0.1s;
+  padding: 2px 6px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.folder-browser-item:hover .folder-browser-ignore { opacity: 1; }
