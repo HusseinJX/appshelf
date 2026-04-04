@@ -2,6 +2,7 @@
 let groups = []
 let apps = []
 let ignoredPaths = new Set()
+let viewMode = 'grid' // 'grid' | 'list'
 let current = null
 let slideIdx = 0
 let selected = new Set()        // selected app IDs
@@ -151,6 +152,18 @@ function renderLibrary() {
   const q = searchQuery.toLowerCase()
   const visibleApps = q ? apps.filter(a => a.name.toLowerCase().includes(q) || (a.description || '').toLowerCase().includes(q)) : apps
 
+  container.classList.toggle('selection-mode', selected.size > 0)
+
+  if (viewMode === 'list') {
+    const sorted = [...visibleApps].sort((a, b) => a.name.localeCompare(b.name))
+    const table = document.createElement('div')
+    table.className = 'app-table'
+    table.innerHTML = `<div class="app-table-header"><span>Name</span><span>Category</span><span>Description</span><span></span></div>`
+    for (const app of sorted) table.appendChild(makeAppRow(app))
+    container.appendChild(table)
+    return
+  }
+
   const byGroup = {}
   const ungrouped = []
   for (const app of visibleApps) {
@@ -162,8 +175,6 @@ function renderLibrary() {
 
   for (const group of groups) container.appendChild(makeGroupSection(group, byGroup[group.id] || []))
   if (ungrouped.length || !groups.length) container.appendChild(makeGroupSection(null, ungrouped))
-
-  container.classList.toggle('selection-mode', selected.size > 0)
 }
 
 function makeGroupSection(group, sectionApps) {
@@ -213,9 +224,9 @@ function makeGroupSection(group, sectionApps) {
   }
   section.appendChild(header)
 
-  // Grid
+  // Grid or list
   const grid = document.createElement('div')
-  grid.className = 'group-grid drop-zone'
+  grid.className = (viewMode === 'list' ? 'group-list' : 'group-grid') + ' drop-zone'
   grid.dataset.groupId = group?.id || '__ungrouped__'
 
   if (!sectionApps.length) {
@@ -223,7 +234,7 @@ function makeGroupSection(group, sectionApps) {
     hint.textContent = group ? 'Drag apps here' : 'Drop folders to add'
     grid.appendChild(hint)
   }
-  for (const app of sectionApps) grid.appendChild(makeAppCard(app))
+  for (const app of sectionApps) grid.appendChild(viewMode === 'list' ? makeAppRow(app) : makeAppCard(app))
 
   grid.addEventListener('dragover', e => { e.preventDefault(); grid.classList.add('drag-over') })
   grid.addEventListener('dragleave', e => { if (!grid.contains(e.relatedTarget)) grid.classList.remove('drag-over') })
@@ -306,15 +317,57 @@ function makeAppCard(app) {
   return card
 }
 
+function makeAppRow(app) {
+  const [dark, light] = palette(app.name)
+  const inPortfolio = portfolioIds.has(slugify(app.name))
+  const isEnriching = enriching.has(app.id)
+  const row = document.createElement('div')
+  row.className = 'app-row' + (selected.has(app.id) ? ' selected' : '')
+  row.dataset.id = app.id
+  row.draggable = true
+  row.innerHTML = `
+    ${isEnriching ? `<div class="enrich-overlay show"><span class="enrich-spin" style="font-size:11px;color:#aaa">…</span></div>` : '<div class="enrich-overlay"></div>'}
+    <div class="app-row-name-cell">
+      <div class="app-row-icon" style="background:linear-gradient(135deg,${light},${dark})">
+        <img src="${appIcon(app)}" onerror="this.style.display='none'">
+      </div>
+      <span class="app-row-name">${esc(app.name)}</span>
+    </div>
+    <div class="app-row-category-cell">${app.category ? `<span class="app-row-category">${esc(app.category)}</span>` : ''}</div>
+    <div class="app-row-desc">${esc(app.description || '')}</div>
+    <div class="app-card-quick">
+      <button class="btn btn-success btn-run" title="Run">▶</button>
+      <button class="btn ${deployBtnClass(app)} btn-deploy" title="${deployBtnTitle(app)}">${deployBtnIcon(app)}</button>
+      <button class="btn btn-terminal" title="Open terminal here">⌨</button>
+      ${app.githubUrl ? `<button class="btn btn-ghost btn-sm app-row-github" title="${esc(app.githubUrl)}">↗ GitHub</button>` : ''}
+    </div>
+  `
+  row.querySelector('.btn-run').addEventListener('click', e => { e.stopPropagation(); doRun(app.id) })
+  row.querySelector('.btn-deploy').addEventListener('click', e => { e.stopPropagation(); doDeploy(app.id) })
+  row.querySelector('.btn-terminal').addEventListener('click', e => { e.stopPropagation(); window.api.openTerminal(app.path) })
+  row.querySelector('.app-row-github')?.addEventListener('click', e => { e.stopPropagation(); window.api.openExternal(app.githubUrl) })
+  row.addEventListener('click', () => showDetail(app))
+  row.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('appId', app.id)
+    e.dataTransfer.effectAllowed = 'move'
+    setTimeout(() => row.classList.add('dragging'), 0)
+  })
+  row.addEventListener('dragend', () => row.classList.remove('dragging'))
+  return row
+}
+
 // ── Card enrich state ──────────────────────────────
+const STEP_LABELS = { reading: 'Reading…', description: 'Description…', category: 'Category…', runCommand: 'Run cmd…', githubUrl: 'GitHub…' }
+
 function setCardEnrichState(appId, status, msg) {
-  const card = document.querySelector(`.app-card[data-id="${appId}"]`)
+  const card = document.querySelector(`.app-card[data-id="${appId}"], .app-row[data-id="${appId}"]`)
   if (!card) return
   const overlay = card.querySelector('.enrich-overlay')
   if (!overlay) return
-  if (status === 'processing') {
+  if (status === 'processing' || status === 'step') {
+    const label = STEP_LABELS[msg] || '…'
     overlay.className = 'enrich-overlay show'
-    overlay.innerHTML = '<span class="enrich-spin">⏳</span>'
+    overlay.innerHTML = `<span class="enrich-spin" style="font-size:11px;color:#aaa">${label}</span>`
   } else if (status === 'done') {
     overlay.className = 'enrich-overlay show'
     overlay.innerHTML = '<span style="color:#4fa32b;font-size:20px">✓</span>'
@@ -872,8 +925,8 @@ async function openSettings() {
     window.api.getProviderSettings()
   ])
   const input = document.getElementById('api-key-input')
-  if (input) input.value = s.anthropicApiKey || ''
-  if (s.hasEnvKey && !s.anthropicApiKey) input.placeholder = '(set via ANTHROPIC_API_KEY env var)'
+  if (input) input.value = s.openaiApiKey || ''
+  if (s.hasEnvKey && !s.openaiApiKey) input.placeholder = '(set via OPENAI_API_KEY env var)'
 
   // Populate DO fields
   const doConfig = providers.digitalocean || {}
@@ -912,8 +965,8 @@ async function startEnrich() {
   }
   if (options.runCommands || options.subApps) {
     const s = await window.api.getSettings()
-    if (!s.anthropicApiKey && !s.hasEnvKey) {
-      toast('Set your Anthropic API key in Settings first', 'error')
+    if (!s.openaiApiKey && !s.hasEnvKey) {
+      toast('Set your OpenAI API key in Settings first', 'error')
       document.getElementById('enrich-panel').classList.add('hidden')
       openSettings(); return
     }
@@ -951,6 +1004,13 @@ async function init() {
   renderLibrary()
 
   // Library buttons
+  const viewToggleBtn = document.getElementById('view-toggle-btn')
+  viewToggleBtn.addEventListener('click', () => {
+    viewMode = viewMode === 'grid' ? 'list' : 'grid'
+    viewToggleBtn.textContent = viewMode === 'grid' ? '⊞' : '☰'
+    renderLibrary()
+  })
+
   document.getElementById('add-group-btn').addEventListener('click', addGroup)
   document.getElementById('add-app-btn').addEventListener('click', openFolderBrowser)
   document.getElementById('empty-add-btn').addEventListener('click', openFolderBrowser)
@@ -976,14 +1036,14 @@ async function init() {
     renderLibrary()
   })
   searchEl.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { searchQuery = ''; searchEl.value = ''; searchEl.classList.remove('visible'); searchEl.blur(); renderLibrary() }
+    if (e.key === 'Escape') { searchQuery = ''; searchEl.value = ''; searchEl.blur(); renderLibrary() }
   })
   document.addEventListener('keydown', e => {
     const tag = document.activeElement?.tagName
     if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA' && !e.metaKey && !e.ctrlKey) {
       e.preventDefault()
-      searchEl.classList.add('visible')
       searchEl.focus()
+      searchEl.select()
     }
   })
 
@@ -1012,7 +1072,7 @@ async function init() {
   document.getElementById('settings-save-btn').addEventListener('click', async () => {
     const key = document.getElementById('api-key-input').value.trim()
     const existing = await window.api.getSettings()
-    await window.api.saveSettings({ ...existing, anthropicApiKey: key })
+    await window.api.saveSettings({ ...existing, openaiApiKey: key })
     closeSettings(); toast('Settings saved', 'success')
   })
 
@@ -1071,11 +1131,28 @@ async function init() {
     }
   })
 
+  function liveLibrarySnapshot() {
+    return {
+      groups,
+      apps,
+      ignoredPaths: [...ignoredPaths]
+    }
+  }
+
   document.getElementById('export-btn').addEventListener('click', async () => {
-    const r = await window.api.exportData()
+    const r = await window.api.exportData(liveLibrarySnapshot())
     if (r.canceled) return
     if (r.error) { toast(r.error, 'error'); return }
-    toast(`Exported to ${r.path.split('/').pop()}`, 'success')
+    const n = r.appCount != null ? `${r.appCount} app${r.appCount !== 1 ? 's' : ''}` : 'Library'
+    toast(`${n} exported → ${r.path.split('/').pop()}`, 'success')
+  })
+
+  document.getElementById('export-names-btn').addEventListener('click', async () => {
+    const r = await window.api.exportNamesList(liveLibrarySnapshot())
+    if (r.canceled) return
+    if (r.error) { toast(r.error, 'error'); return }
+    const n = r.count != null ? `${r.count} name${r.count !== 1 ? 's' : ''}` : 'Names'
+    toast(`${n} → ${r.path.split('/').pop()}`, 'success')
   })
 
   document.getElementById('import-btn').addEventListener('click', async () => {
@@ -1099,7 +1176,15 @@ async function init() {
   document.getElementById('back-btn').addEventListener('click', () => { goBack(); renderLibrary() })
 
   // Enrich progress events
-  window.api.onEnrichProgress(({ appId, status, result, error }) => {
+  window.api.onEnrichProgress(({ appId, status, step, result, error }) => {
+    if (status === 'step') {
+      setCardEnrichState(appId, 'step', step)
+      if (result) {
+        const i = apps.findIndex(a => a.id === appId)
+        if (i !== -1) apps[i] = result
+      }
+      return
+    }
     enriching.delete(appId)
     if (status === 'done' && result) {
       const i = apps.findIndex(a => a.id === appId)

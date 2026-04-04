@@ -140,7 +140,21 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 
 // ── IPC: Data ──────────────────────────────────────
-ipcMain.handle('get-data', () => loadData())
+ipcMain.handle('get-data', () => {
+  const data = loadData()
+  let changed = false
+  for (const app of data.apps) {
+    if (!app.path) continue
+    const fresh = findScreenshots(app.path)
+    const prev = JSON.stringify(app.screenshots || [])
+    if (JSON.stringify(fresh) !== prev) {
+      app.screenshots = fresh
+      changed = true
+    }
+  }
+  if (changed) saveData(data)
+  return data
+})
 
 ipcMain.handle('select-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -689,16 +703,53 @@ ipcMain.on('move-window', (_, { dx, dy }) => {
 })
 
 // ── IPC: Export / Import ───────────────────────────
-ipcMain.handle('export-data', async () => {
+function buildExportPayload(liveSnapshot) {
+  if (liveSnapshot && typeof liveSnapshot === 'object' && Array.isArray(liveSnapshot.apps)) {
+    return {
+      groups: Array.isArray(liveSnapshot.groups) ? liveSnapshot.groups : [],
+      apps: liveSnapshot.apps,
+      ignoredPaths: Array.isArray(liveSnapshot.ignoredPaths) ? liveSnapshot.ignoredPaths : []
+    }
+  }
+  return loadData()
+}
+
+ipcMain.handle('export-data', async (_, liveSnapshot) => {
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Export AppShelf Data',
     defaultPath: `appshelf-${new Date().toISOString().slice(0,10)}.json`,
     filters: [{ name: 'JSON', extensions: ['json'] }]
   })
   if (result.canceled) return { canceled: true }
-  const data = loadData()
-  fs.writeFileSync(result.filePath, JSON.stringify(data, null, 2))
-  return { success: true, path: result.filePath }
+  const data = buildExportPayload(liveSnapshot)
+  const out = {
+    ...data,
+    exportedAt: new Date().toISOString(),
+    exportVersion: 1
+  }
+  fs.writeFileSync(result.filePath, JSON.stringify(out, null, 2))
+  return { success: true, path: result.filePath, appCount: data.apps.length, groupCount: data.groups.length }
+})
+
+ipcMain.handle('export-names', async (_, liveSnapshot) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export app names (text)',
+    defaultPath: `appshelf-names-${new Date().toISOString().slice(0, 10)}.txt`,
+    filters: [{ name: 'Plain text', extensions: ['txt'] }, { name: 'JSON', extensions: ['json'] }]
+  })
+  if (result.canceled) return { canceled: true }
+  const data = buildExportPayload(liveSnapshot)
+  const names = data.apps.map(a => a.name).filter(Boolean).sort((a, b) => a.localeCompare(b))
+  const ext = path.extname(result.filePath).toLowerCase()
+  if (ext === '.json') {
+    fs.writeFileSync(
+      result.filePath,
+      JSON.stringify({ exportedAt: new Date().toISOString(), count: names.length, names }, null, 2)
+    )
+  } else {
+    fs.writeFileSync(result.filePath, names.join('\n') + (names.length ? '\n' : ''))
+  }
+  return { success: true, path: result.filePath, count: names.length }
 })
 
 ipcMain.handle('import-data', async () => {
@@ -768,10 +819,10 @@ ipcMain.handle('get-settings', () => {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))
-      return { ...s, hasEnvKey: !!process.env.ANTHROPIC_API_KEY }
+      return { ...s, hasEnvKey: !!process.env.OPENAI_API_KEY }
     }
   } catch (e) {}
-  return { hasEnvKey: !!process.env.ANTHROPIC_API_KEY }
+  return { hasEnvKey: !!process.env.OPENAI_API_KEY }
 })
 
 ipcMain.handle('save-settings', async (_, settings) => {
@@ -779,14 +830,14 @@ ipcMain.handle('save-settings', async (_, settings) => {
   return true
 })
 
-function getApiKey() {
+function getOpenAIApiKey() {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))
-      if (s.anthropicApiKey) return s.anthropicApiKey
+      if (s.openaiApiKey) return s.openaiApiKey
     }
   } catch (e) {}
-  return process.env.ANTHROPIC_API_KEY || ''
+  return process.env.OPENAI_API_KEY || ''
 }
 
 // ── Enrichment helpers ─────────────────────────────
@@ -854,47 +905,70 @@ function gatherFolderContext(folderPath) {
   return { structure: dirTree(folderPath, 2), files }
 }
 
-async function callClaudeEnrich(context, options, apiKey) {
-  const Anthropic = require('@anthropic-ai/sdk')
-  const client = new Anthropic({ apiKey })
-
-  const prompt = `Analyze this software project. Return ONLY a JSON object — no markdown, no explanation.
-
-Directory structure:
-${context.structure}
-
-${context.files.map(f => `=== ${f.name} ===\n${f.content}`).join('\n\n')}
-
-Return exactly this JSON shape:
-{
-  "runCommands": [{"name": "short label (Dev/Start/Test/Build etc)", "command": "exact shell command"}],
-  "subApps": [{"name": "service name", "relPath": "path/relative/to/root", "runCommand": "command"}]
+function callOpenAI(messages, apiKey, maxTokens = 256) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ model: 'gpt-4o-mini', messages, max_tokens: maxTokens, temperature: 0 })
+    const req = https.request({
+      hostname: 'api.openai.com',
+      path: '/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }, res => {
+      let data = ''
+      res.on('data', chunk => data += chunk)
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data)
+          if (json.error) return reject(new Error(json.error.message))
+          resolve(json.choices[0].message.content.trim())
+        } catch (e) { reject(e) }
+      })
+    })
+    req.on('error', reject)
+    req.write(body)
+    req.end()
+  })
 }
 
-Rules:
-- runCommands: include ALL distinct ways to run/start/develop/test this project. Look at package.json scripts, Makefile targets, Procfile entries, Docker commands, Python/Go/Rust entry points.
-${!options.runCommands ? '- Set runCommands to []' : ''}
-- subApps: only include genuinely separate runnable services (monorepo packages, separate frontend+backend, etc). Empty array if none.
-${!options.subApps ? '- Set subApps to []' : ''}
-- Return valid JSON only. Empty arrays are fine.`
+function contextBlock(context) {
+  return `Directory structure:\n${context.structure}\n\n${context.files.map(f => `=== ${f.name} ===\n${f.content}`).join('\n\n')}`
+}
 
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: prompt }]
-  })
+async function aiEnrichDescription(context, apiKey) {
+  return callOpenAI([
+    { role: 'system', content: 'You are a code analyst. Return only the requested value, no explanation or markdown.' },
+    { role: 'user', content: `Write a 1-2 sentence description of what this software project does.\n\n${contextBlock(context)}\n\nReturn only the description text.` }
+  ], apiKey, 200)
+}
 
-  const text = response.content[0].text.trim()
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) return { runCommands: [], subApps: [] }
-  try { return JSON.parse(match[0]) } catch (e) { return { runCommands: [], subApps: [] } }
+const CATEGORIES = ['Web App', 'API / Backend', 'CLI Tool', 'Library / SDK', 'Mobile App', 'Desktop App', 'Data / ML', 'DevOps / Infra', 'Game', 'Bot / Automation', 'Other']
+
+async function aiEnrichCategory(context, description, apiKey) {
+  const text = await callOpenAI([
+    { role: 'system', content: 'You are a code analyst. Return only the category name from the list, nothing else.' },
+    { role: 'user', content: `Categorize this project.\n\nDescription: ${description}\n\n${contextBlock(context)}\n\nChoose exactly one: ${CATEGORIES.join(', ')}\n\nReturn only the category name.` }
+  ], apiKey, 20)
+  return CATEGORIES.find(c => text.toLowerCase().includes(c.toLowerCase())) || 'Other'
+}
+
+async function aiEnrichRunCommand(context, apiKey) {
+  const text = await callOpenAI([
+    { role: 'system', content: 'You are a code analyst. Return only the shell command, nothing else.' },
+    { role: 'user', content: `Find the primary shell command to run/start this project in development.\n\n${contextBlock(context)}\n\nReturn only the exact shell command (e.g. "npm run dev"). If unknown, return empty string.` }
+  ], apiKey, 60)
+  return text.replace(/^["'`]|["'`]$/g, '').trim()
 }
 
 // ── IPC: Enrich ────────────────────────────────────
 ipcMain.handle('enrich-apps', async (_, { appIds, options }) => {
-  const apiKey = getApiKey()
-  if ((options.runCommands || options.subApps) && !apiKey) {
-    return { error: 'No Anthropic API key set. Add it in Settings.' }
+  const apiKey = getOpenAIApiKey()
+  const needsAI = options.runCommands
+  if (needsAI && !apiKey) {
+    return { error: 'No OpenAI API key set. Add it in Settings.' }
   }
 
   const data = loadData()
@@ -909,49 +983,62 @@ ipcMain.handle('enrich-apps', async (_, { appIds, options }) => {
     try {
       const enriched = {}
 
-      // GitHub URL (deterministic)
-      if (options.githubUrl) {
-        const url = readGitRemoteUrl(app_data.path)
-        if (url) enriched.githubUrl = url
+      if (needsAI) {
+        // Step 1: read code
+        mainWindow.webContents.send('enrich-progress', { appId, status: 'step', step: 'reading' })
+        const context = gatherFolderContext(app_data.path)
+
+        // Step 2: description
+        mainWindow.webContents.send('enrich-progress', { appId, status: 'step', step: 'description' })
+        const description = await aiEnrichDescription(context, apiKey)
+        if (description) enriched.description = description
+        data.apps[appIdx] = { ...app_data, ...enriched }
+        saveData(data)
+        mainWindow.webContents.send('enrich-progress', { appId, status: 'step', step: 'description', result: data.apps[appIdx] })
+
+        // Step 3: category
+        mainWindow.webContents.send('enrich-progress', { appId, status: 'step', step: 'category' })
+        const category = await aiEnrichCategory(context, enriched.description || app_data.description || '', apiKey)
+        if (category) enriched.category = category
+        data.apps[appIdx] = { ...app_data, ...enriched }
+        saveData(data)
+        mainWindow.webContents.send('enrich-progress', { appId, status: 'step', step: 'category', result: data.apps[appIdx] })
+
+        // Step 4: run command
+        mainWindow.webContents.send('enrich-progress', { appId, status: 'step', step: 'runCommand' })
+        const runCmd = await aiEnrichRunCommand(context, apiKey)
+        if (runCmd) {
+          enriched.runCommand = runCmd
+          enriched.runCommands = [{ name: 'Start', command: runCmd }]
+        }
+        data.apps[appIdx] = { ...app_data, ...enriched }
+        saveData(data)
+        mainWindow.webContents.send('enrich-progress', { appId, status: 'step', step: 'runCommand', result: data.apps[appIdx] })
       }
 
-      // AI enrichment
-      if (options.runCommands || options.subApps) {
-        const context = gatherFolderContext(app_data.path)
-        const ai = await callClaudeEnrich(context, options, apiKey)
-        if (options.runCommands && ai.runCommands?.length) {
-          enriched.runCommands = ai.runCommands
-          // Promote first command to primary if none set
-          if (!app_data.runCommand) enriched.runCommand = ai.runCommands[0].command
-        }
-        if (options.subApps && ai.subApps?.length) {
-          enriched.subApps = ai.subApps
-        }
+      // Step 5: GitHub URL (deterministic, always fast)
+      if (options.githubUrl) {
+        mainWindow.webContents.send('enrich-progress', { appId, status: 'step', step: 'githubUrl' })
+        const url = readGitRemoteUrl(app_data.path)
+        if (url) enriched.githubUrl = url
+        data.apps[appIdx] = { ...app_data, ...enriched }
+        saveData(data)
       }
 
       // Deploy status check
       if (options.deployCheck) {
         const portfolio = getPortfolioSettings()
         const appName = app_data.name
-        let inPortfolio = null
-        let isLive = null
-
+        let inPortfolio = null, isLive = null
         if (portfolio.filePath && fs.existsSync(portfolio.filePath)) {
-          try {
-            const content = fs.readFileSync(portfolio.filePath, 'utf8')
-            inPortfolio = content.toLowerCase().includes(appName.toLowerCase())
-          } catch (e) { inPortfolio = null }
+          try { inPortfolio = fs.readFileSync(portfolio.filePath, 'utf8').toLowerCase().includes(appName.toLowerCase()) } catch (e) {}
         }
-
-        if (portfolio.liveUrl) {
-          isLive = await checkUrlForText(portfolio.liveUrl, appName)
-        }
-
+        if (portfolio.liveUrl) isLive = await checkUrlForText(portfolio.liveUrl, appName)
         enriched.deployStatus = { inPortfolio, isLive, checkedAt: new Date().toISOString() }
+        data.apps[appIdx] = { ...app_data, ...enriched }
+        saveData(data)
       }
 
-      data.apps[appIdx] = { ...app_data, ...enriched }
-      saveData(data)
       mainWindow.webContents.send('enrich-progress', { appId, status: 'done', result: data.apps[appIdx] })
     } catch (e) {
       mainWindow.webContents.send('enrich-progress', { appId, status: 'error', error: e.message })
