@@ -635,12 +635,13 @@ ipcMain.handle('toggle-portfolio-project', (_, app) => {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2))
     return { inPortfolio: false }
   } else {
+    const githubUrl = app.githubUrl || (app.path ? readGitRemoteUrl(app.path) : '') || ''
     data.projects.push({
       id,
       name: app.name,
       description: app.description || '',
-      url: app.liveUrl || app.githubUrl || '',
-      githubUrl: app.githubUrl || '',
+      url: app.liveUrl || githubUrl,
+      githubUrl,
       category: 'Productivity'
     })
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2))
@@ -702,12 +703,13 @@ ipcMain.handle('sync-portfolio', () => {
   for (const app of appData.apps) {
     const id = slugify(app.name)
     const category = (app.groupId && groupMap[app.groupId]) || 'Productivity'
+    const githubUrl = app.githubUrl || (app.path ? readGitRemoteUrl(app.path) : '') || ''
     const entry = {
       id,
       name: app.name,
       description: app.description || '',
-      url: app.liveUrl || app.githubUrl || '',
-      githubUrl: app.githubUrl || '',
+      url: app.liveUrl || githubUrl,
+      githubUrl,
       category
     }
     const idx = pfData.projects.findIndex(p => p.id === id)
