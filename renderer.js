@@ -1050,6 +1050,21 @@ async function init() {
   // Selection bar
   document.getElementById('sel-all-btn').addEventListener('click', selectAll)
   document.getElementById('sel-none-btn').addEventListener('click', selectNone)
+  document.getElementById('sync-selected-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('sync-selected-btn')
+    const appIds = [...selected]
+    if (!appIds.length) { toast('No apps selected', 'error'); return }
+    btn.disabled = true; btn.textContent = '↑ Syncing…'
+    const r = await window.api.syncPortfolioSelected(appIds)
+    btn.disabled = false; btn.textContent = '↑ Portfolio'
+    if (r.notConfigured) { toast('Set your portfolio JSON file path first', 'error'); openPortfolio(); return }
+    if (r.error) { toast(r.error, 'error'); return }
+    const parts = []
+    if (r.added) parts.push(`${r.added} added`)
+    if (r.updated) parts.push(`${r.updated} updated`)
+    if (r.skipped) parts.push(`${r.skipped} skipped (no GitHub)`)
+    toast(parts.length ? `Portfolio synced: ${parts.join(', ')}` : 'Already up to date', 'success')
+  })
   document.getElementById('enrich-btn').addEventListener('click', () => {
     document.getElementById('enrich-panel').classList.toggle('hidden')
   })

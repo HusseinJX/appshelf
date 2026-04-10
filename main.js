@@ -648,6 +648,45 @@ ipcMain.handle('toggle-portfolio-project', (_, app) => {
   }
 })
 
+ipcMain.handle('sync-portfolio-selected', (_, appIds) => {
+  const { filePath } = getPortfolioSettings()
+  if (!filePath) return { notConfigured: true }
+  const pfData = loadPortfolioData(filePath)
+  if (!pfData) return { error: 'Portfolio file not found' }
+  if (!Array.isArray(pfData.projects)) return { error: 'Invalid portfolio JSON: expected a "projects" array' }
+
+  const appData = loadData()
+  const groupMap = {}
+  for (const g of appData.groups) groupMap[g.id] = g.name
+
+  const selectedApps = appData.apps.filter(a => appIds.includes(a.id) && a.githubUrl)
+  let added = 0, updated = 0, skipped = 0
+  for (const app of selectedApps) {
+    const id = slugify(app.name)
+    const category = (app.groupId && groupMap[app.groupId]) || 'Productivity'
+    const entry = {
+      id,
+      name: app.name,
+      description: app.description || '',
+      url: app.liveUrl || app.githubUrl || '',
+      githubUrl: app.githubUrl || '',
+      category
+    }
+    const idx = pfData.projects.findIndex(p => p.id === id)
+    if (idx === -1) {
+      pfData.projects.push(entry)
+      added++
+    } else {
+      const existing = pfData.projects[idx]
+      const changed = Object.keys(entry).some(k => entry[k] !== existing[k])
+      if (changed) { pfData.projects[idx] = { ...existing, ...entry }; updated++ }
+    }
+  }
+  skipped = appIds.length - selectedApps.length
+  fs.writeFileSync(filePath, JSON.stringify(pfData, null, 2))
+  return { added, updated, skipped }
+})
+
 ipcMain.handle('sync-portfolio', () => {
   const { filePath } = getPortfolioSettings()
   if (!filePath) return { notConfigured: true }

@@ -34,5 +34,6 @@ contextBridge.exposeInMainWorld('api', {
   getPortfolioIds: () => ipcRenderer.invoke('get-portfolio-ids'),
   togglePortfolioProject: (app) => ipcRenderer.invoke('toggle-portfolio-project', app),
   syncPortfolio: () => ipcRenderer.invoke('sync-portfolio'),
+  syncPortfolioSelected: (appIds) => ipcRenderer.invoke('sync-portfolio-selected', appIds),
   openTerminal: (folderPath) => ipcRenderer.invoke('open-terminal', folderPath),
 })
